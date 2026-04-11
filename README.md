@@ -13,15 +13,37 @@
 
 ### video-to-note
 
-输入 Bilibili 视频链接 → skill 自动提取字幕（ASR）→ 输出结构化 Obsidian 笔记。
+使用示例：
+
+```sh
+/video-to-note https://www.bilibili.com/list/watchlater/?bvid=BV1rxqmBhE91
+```
+
+> 输入 Bilibili 视频链接 → skill 自动提取字幕（ASR）→ 输出结构化 Obsidian 笔记。
+
+<details>
+<summary>查看截图</summary>
 
 ![上班、自由与结构](assets/examples/video-to-note.png)
 
+</details>
+
 ### article-to-note
 
-输入微信公众号等文章链接 → skill 自动提取正文 → 输出结构化 Obsidian 笔记。
+使用示例：
+
+```sh
+/article-to-note https://mp.weixin.qq.com/s/Ld_NbZZaYd2z9qpfMxP_aQ
+```
+
+> 输入微信公众号等文章链接 → skill 自动提取正文 → 输出结构化 Obsidian 笔记。
+
+<details>
+<summary>查看截图</summary>
 
 ![极简主义背后的逻辑](assets/examples/article-to-note.png)
+
+</details>
 
 ## 安装
 
