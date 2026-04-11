@@ -15,8 +15,13 @@
 
 输入 Bilibili 视频链接 → skill 自动提取字幕（ASR）→ 输出结构化 Obsidian 笔记。
 
-**示例笔记：**[上班、自由与结构：我们这一代人究竟被困在哪儿？](examples/video-to-note/上班、自由与结构-我们这一代人究竟被困在哪儿.md)
-— 30 分钟哲学视频，提炼为结构化核心观点、关键概念表与行动反思清单。
+![上班、自由与结构](assets/examples/video-to-note.png)
+
+### article-to-note
+
+输入微信公众号等文章链接 → skill 自动提取正文 → 输出结构化 Obsidian 笔记。
+
+![极简主义背后的逻辑](assets/examples/article-to-note.png)
 
 ## 安装
 
