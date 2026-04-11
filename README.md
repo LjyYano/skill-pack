@@ -11,15 +11,13 @@
 
 ## 示例
 
-### video-to-note
-
-使用示例：
+### video-to-note 示例
 
 ```sh
-/video-to-note https://www.bilibili.com/list/watchlater/?bvid=BV1rxqmBhE91
+/video-to-note https://www.bilibili.com/video/BV1rxqmBhE91/
 ```
 
-> 输入 Bilibili 视频链接 → skill 自动提取字幕（ASR）→ 输出结构化 Obsidian 笔记。
+> 输入 Bilibili 视频链接 → skill 优先使用视频自带字幕；若无字幕，则下载音频并调用阿里云 ASR 转录 → 输出结构化 Obsidian 笔记。
 
 <details>
 <summary>查看截图</summary>
@@ -28,9 +26,47 @@
 
 </details>
 
-### article-to-note
+#### ASR 配置（无字幕时需要）
 
-使用示例：
+当视频没有字幕时，skill 会使用阿里云 DashScope 的 `qwen3-asr-flash` 模型进行语音识别，需要配置 API Key。
+
+**1. 获取 API Key**
+
+前往 [阿里云百炼控制台](https://bailian.console.aliyun.com/) → 右上角头像 → **API-KEY** → 新建并复制。
+
+**2. 配置环境变量**
+
+```bash
+# 临时生效（当前终端）
+export ALIYUN_API_KEY="sk-xxxxxxxxxxxxxxxxxxxx"
+
+# 永久生效（写入 shell 配置文件）
+echo 'export ALIYUN_API_KEY="sk-xxxxxxxxxxxxxxxxxxxx"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+> **注意：** 在 Claude Code 中设置环境变量后，需要重启 Claude Code 才能生效。
+
+**3. 验证配置**
+
+```bash
+echo $ALIYUN_API_KEY
+```
+
+输出非空即表示配置成功。
+
+**其他依赖（ASR 路径需要）**
+
+```bash
+# macOS
+brew install yt-dlp ffmpeg
+
+# 验证
+yt-dlp --version
+ffmpeg -version
+```
+
+### article-to-note 示例
 
 ```sh
 /article-to-note https://mp.weixin.qq.com/s/Ld_NbZZaYd2z9qpfMxP_aQ
