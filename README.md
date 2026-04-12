@@ -1,6 +1,6 @@
 # skill-pack
 
-为 AI 编程助手精心整理的 skill 合集，兼容 Claude Code、Codex CLI 和 OpenCode。
+为 AI 编程助手精心整理的 skill 合集，兼容 Claude Code、Codex CLI、OpenCode 和 OpenClaw。
 
 ## Skills
 
@@ -28,6 +28,9 @@ curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh 
 
 # OpenCode
 curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --opencode
+
+# OpenClaw
+curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --openclaw
 
 # 全部安装
 curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --all
@@ -119,3 +122,4 @@ ffmpeg -version
 | Claude Code | `~/.claude/skills/` |
 | Codex CLI | `~/.codex/skills/` |
 | OpenCode | `~/.opencode/skills/` |
+| OpenClaw | `~/.openclaw/skills/` |
