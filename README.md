@@ -7,6 +7,7 @@
 | Skill | 说明 |
 |-------|------|
 | [article-to-note](skills/article-to-note/SKILL.md) | 通过 Defuddle 或 web_reader 将网页文章转为 Obsidian 笔记 |
+| [article-to-anki](skills/article-to-anki/SKILL.md) | 将网页文章转为 Anki 卡片（Markdown 格式，可导入 Anki） |
 | [video-to-note](skills/video-to-note/SKILL.md) | 通过字幕或 ASR 将 YouTube / Bilibili 视频转为 Obsidian 笔记 |
 
 ## 安装
@@ -41,6 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh 
 ```bash
 cp -r skills/video-to-note  ~/.claude/skills/
 cp -r skills/article-to-note ~/.claude/skills/
+cp -r skills/article-to-anki ~/.claude/skills/
 ```
 
 ## 示例
@@ -59,6 +61,14 @@ cp -r skills/article-to-note ~/.claude/skills/
 ![极简主义背后的逻辑](assets/examples/article-to-note.png)
 
 </details>
+
+### article-to-anki 示例
+
+```sh
+/article-to-anki https://mp.weixin.qq.com/s/Ld_NbZZaYd2z9qpfMxP_aQ
+```
+
+> 输入文章链接 → skill 自动提取正文 → 按逻辑拆分为独立知识卡片 → 输出 Markdown 格式的 Anki 卡片文件。
 
 ### video-to-note 示例
 

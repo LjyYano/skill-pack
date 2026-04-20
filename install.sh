@@ -5,6 +5,7 @@ REPO="https://raw.githubusercontent.com/LjyYano/skill-pack/main"
 SKILLS=(
   "video-to-note"
   "article-to-note"
+  "article-to-anki"
 )
 
 # Target directories per tool
