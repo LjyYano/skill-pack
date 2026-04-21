@@ -6,6 +6,7 @@ SKILLS=(
   "video-to-note"
   "article-to-note"
   "article-to-anki"
+  "podcast-to-html"
 )
 
 # Target directories per tool
@@ -23,6 +24,12 @@ install_skills() {
   for skill in "${SKILLS[@]}"; do
     mkdir -p "$target_dir/$skill"
     curl -fsSL "$REPO/skills/$skill/SKILL.md" -o "$target_dir/$skill/SKILL.md"
+    # Download extra files if they exist
+    for extra in template.html; do
+      if curl -fsSL "$REPO/skills/$skill/$extra" -o "$target_dir/$skill/$extra" 2>/dev/null; then
+        :
+      fi
+    done
     echo "  ✓ $skill"
   done
 }
