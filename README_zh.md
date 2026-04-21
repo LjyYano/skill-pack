@@ -82,7 +82,7 @@ cp -r skills/podcast-to-html ~/.claude/skills/
 
 > 输入播客链接 → skill 先生成笔记 → 再生成 Podwise 风格的独立 HTML 页面，包含侧边栏、6 个标签页（摘要、思维导图、转录、关键词、金句、Shownotes）、深色/浅色主题切换和交互式 markmap。
 
-<video src="assets/examples/podcast-to-html.mp4" controls width="100%"></video>
+<video src="https://github.com/LjyYano/skill-pack/raw/main/assets/examples/podcast-to-html.mp4" controls width="100%"></video>
 
 ### video-to-note 示例
 
