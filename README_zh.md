@@ -11,6 +11,7 @@
 | [article-to-note](skills/article-to-note/SKILL.md) | 通过 Defuddle 或 web_reader 将网页文章转为 Obsidian 笔记 |
 | [article-to-anki](skills/article-to-anki/SKILL.md) | 将网页文章转为 Anki 卡片（Markdown 格式，可导入 Anki） |
 | [video-to-note](skills/video-to-note/SKILL.md) | 通过字幕或 ASR 将 YouTube / Bilibili 视频转为 Obsidian 笔记 |
+| [podcast-to-html](skills/podcast-to-html/SKILL.md) | 将播客笔记转为 Podwise 风格的独立 HTML 展示页面 |
 
 ## 安装
 
@@ -45,6 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh 
 cp -r skills/video-to-note  ~/.claude/skills/
 cp -r skills/article-to-note ~/.claude/skills/
 cp -r skills/article-to-anki ~/.claude/skills/
+cp -r skills/podcast-to-html ~/.claude/skills/
 ```
 
 ## 示例

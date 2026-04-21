@@ -11,6 +11,7 @@ A curated collection of skills for AI coding assistants, compatible with Claude 
 | [article-to-note](skills/article-to-note/SKILL.md) | Convert web articles to Obsidian notes via Defuddle or web_reader |
 | [article-to-anki](skills/article-to-anki/SKILL.md) | Convert web articles to Anki cards (Markdown format, import-ready) |
 | [video-to-note](skills/video-to-note/SKILL.md) | Convert YouTube / Bilibili videos to Obsidian notes via subtitles or ASR |
+| [podcast-to-html](skills/podcast-to-html/SKILL.md) | Convert podcast notes to Podwise-inspired standalone HTML viewers |
 
 ## Installation
 
@@ -45,6 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh 
 cp -r skills/video-to-note  ~/.claude/skills/
 cp -r skills/article-to-note ~/.claude/skills/
 cp -r skills/article-to-anki ~/.claude/skills/
+cp -r skills/podcast-to-html ~/.claude/skills/
 ```
 
 ## Examples
