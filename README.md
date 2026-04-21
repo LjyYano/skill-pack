@@ -83,9 +83,9 @@ cp -r skills/podcast-to-html ~/.claude/skills/
 > Paste a podcast URL → the skill generates the note first → then produces a Podwise-inspired standalone HTML with sidebar, 6 tabs (Summary, Mindmap, Transcript, Keywords, Highlights, Shownotes), dark/light theme, and interactive markmap.
 
 <details>
-<summary>Example</summary>
+<summary>Demo</summary>
 
-[podcast-to-html example (open in browser)](assets/examples/podcast-to-html.html)
+https://github.com/user-attachments/assets/podcast-to-html-demo.mp4
 
 </details>
 
