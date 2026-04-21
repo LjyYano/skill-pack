@@ -74,6 +74,21 @@ cp -r skills/podcast-to-html ~/.claude/skills/
 
 > Paste an article URL → the skill extracts the content → splits into independent knowledge cards → outputs Markdown Anki card files.
 
+### podcast-to-html
+
+```sh
+/podcast-to-html https://www.xiaoyuzhoufm.com/episode/67e28c5bcb0b28151f8e8d42
+```
+
+> Paste a podcast URL → the skill generates the note first → then produces a Podwise-inspired standalone HTML with sidebar, 6 tabs (Summary, Mindmap, Transcript, Keywords, Highlights, Shownotes), dark/light theme, and interactive markmap.
+
+<details>
+<summary>Example</summary>
+
+[podcast-to-html example (open in browser)](assets/examples/podcast-to-html.html)
+
+</details>
+
 ### video-to-note
 
 ```sh

@@ -74,6 +74,21 @@ cp -r skills/podcast-to-html ~/.claude/skills/
 
 > 输入文章链接 → skill 自动提取正文 → 按逻辑拆分为独立知识卡片 → 输出 Markdown 格式的 Anki 卡片文件。
 
+### podcast-to-html 示例
+
+```sh
+/podcast-to-html https://www.xiaoyuzhoufm.com/episode/67e28c5bcb0b28151f8e8d42
+```
+
+> 输入播客链接 → skill 先生成笔记 → 再生成 Podwise 风格的独立 HTML 页面，包含侧边栏、6 个标签页（摘要、思维导图、转录、关键词、金句、Shownotes）、深色/浅色主题切换和交互式 markmap。
+
+<details>
+<summary>查看示例</summary>
+
+[podcast-to-html 示例（在浏览器中打开）](assets/examples/podcast-to-html.html)
+
+</details>
+
 ### video-to-note 示例
 
 ```sh
