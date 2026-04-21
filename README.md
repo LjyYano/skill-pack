@@ -77,17 +77,12 @@ cp -r skills/podcast-to-html ~/.claude/skills/
 ### podcast-to-html
 
 ```sh
-/podcast-to-html https://www.xiaoyuzhoufm.com/episode/67e28c5bcb0b28151f8e8d42
+/podcast-to-html https://podcasts.apple.com/cn/podcast/%E5%95%86%E4%B8%9A%E5%B0%8F%E6%A0%B735-%E9%9C%8D%E5%B0%94%E6%9C%A8%E5%85%B9%E6%B5%B7%E5%B3%A1%E4%B8%8A%E7%9A%84%E7%89%B9%E6%AE%8A%E4%BF%9D%E9%99%A9/id1552904790?i=1000755467027
 ```
 
 > Paste a podcast URL → the skill generates the note first → then produces a Podwise-inspired standalone HTML with sidebar, 6 tabs (Summary, Mindmap, Transcript, Keywords, Highlights, Shownotes), dark/light theme, and interactive markmap.
 
-<details>
-<summary>Demo</summary>
-
-https://github.com/user-attachments/assets/podcast-to-html-demo.mp4
-
-</details>
+<video src="assets/examples/podcast-to-html.mp4" controls width="100%"></video>
 
 ### video-to-note
 
