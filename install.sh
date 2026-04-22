@@ -3,10 +3,9 @@ set -e
 
 REPO="https://raw.githubusercontent.com/LjyYano/skill-pack/main"
 SKILLS=(
-  "video-to-note"
-  "article-to-note"
+  "link-to-note"
+  "link-to-html"
   "article-to-anki"
-  "podcast-to-html"
 )
 
 # Target directories per tool
