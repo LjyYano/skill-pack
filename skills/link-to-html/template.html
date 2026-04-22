@@ -478,14 +478,6 @@ a{color:inherit;text-decoration:none}
   align-items:center;
   gap:4px;
 }
-.speaker-chip{
-  padding:2px 9px;
-  border-radius:var(--radius-full);
-  font-size:11px;
-  font-weight:600;
-  transition:all var(--duration-base) var(--ease-default);
-}
-{{SPEAKER_CSS}}
 .turn-body{
   font-size:14px;
   line-height:1.85;
@@ -495,7 +487,7 @@ a{color:inherit;text-decoration:none}
   transition:color var(--duration-base) var(--ease-default),
              border-color var(--duration-base) var(--ease-default);
 }
-{{TURN_ACTIVE_CSS}}
+.turn.active .turn-body{border-left-color:var(--accent)}
 .turn-divider{
   height:1px;
   background:var(--border-subtle);
@@ -850,7 +842,7 @@ a{color:inherit;text-decoration:none}
           </button>
           <button class="tab" data-tab="transcript">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            {{TAB_3_LABEL}}
+            Transcript
           </button>
           <button class="tab" data-tab="keywords">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -862,7 +854,7 @@ a{color:inherit;text-decoration:none}
           </button>
           <button class="tab" data-tab="shownotes">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            {{TAB_6_LABEL}}
+            Shownotes
           </button>
         </div>
         <div class="layout-toggle">
@@ -971,11 +963,6 @@ a{color:inherit;text-decoration:none}
 /* ============================================================
    Data
    ============================================================ */
-const TYPE = "{{TYPE}}";
-const HAS_TIMESTAMPS = {{HAS_TIMESTAMPS}};
-const HAS_OUTLINES = {{HAS_OUTLINES}};
-const HAS_SPEAKERS = {{HAS_SPEAKERS}};
-
 const OUTLINES = {{OUTLINES_JSON}};
 
 const TURNS = {{TURNS_JSON}};
@@ -986,24 +973,16 @@ const KEYWORDS = {{KEYWORDS_JSON}};
 
 const MINDMAP_MD = `{{MINDMAP_MD}}`;
 
-const SPEAKER_CLASS = {{SPEAKER_CLASS_JSON}};
-
 /* ============================================================
    Render: Outlines
    ============================================================ */
 const outlinesEl = document.getElementById('outlines');
-if (!HAS_OUTLINES) {
-  if (outlinesEl) outlinesEl.remove();
-  const sectionTitles = document.querySelectorAll('.section-title');
-  sectionTitles.forEach(el => { if (el.textContent.includes('Outlines')) el.remove(); });
-} else {
 outlinesEl.innerHTML = OUTLINES.map(o =>
   `<div class="outline">
      <span class="ts">${o.ts}</span>
      <span class="outline-text">${o.text}</span>
    </div>`
 ).join('');
-}
 
 /* ============================================================
    Render: Transcript
@@ -1012,23 +991,19 @@ const transcriptEl = document.getElementById('transcript-list');
 function renderTranscript(filter){
   const kw = (filter||'').trim().toLowerCase();
   transcriptEl.innerHTML = TURNS.map((t, i) => {
-    const sp = SPEAKER_CLASS[t.sp] || Object.values(SPEAKER_CLASS)[0] || 'sp1';
     const matched = !kw || t.text.toLowerCase().includes(kw) || t.ts.includes(kw);
     if(!matched) return '';
     const text = kw
       ? t.text.replace(new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
           m => `<mark style="background:rgba(124,92,252,0.25);color:var(--fg1);padding:0 2px;border-radius:3px">${m}</mark>`)
       : t.text;
-    const speakerChip = HAS_SPEAKERS ? `<span class="speaker-chip speaker-${sp}">${t.sp}</span>` : '';
-    const tsSpan = HAS_TIMESTAMPS ? `<span class="turn-ts">
+    return `
+      <div class="turn" data-i="${i}">
+        <div class="turn-head">
+          <span class="turn-ts">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             ${t.ts}
-          </span>` : '';
-    return `
-      <div class="turn ${sp}" data-i="${i}">
-        <div class="turn-head">
-          ${tsSpan}
-          ${speakerChip}
+          </span>
         </div>
         <div class="turn-body">${text}</div>
         ${i < TURNS.length-1 ? '<div class="turn-divider"></div>' : ''}
@@ -1059,10 +1034,10 @@ highlightsEl.innerHTML = HIGHLIGHTS.map((h, i) => `
     <span class="quote-mark">&ldquo;</span>
     <p class="highlight-text">${h.text}</p>
     <div class="highlight-foot">
-      ${HAS_TIMESTAMPS ? `<span class="highlight-ts">
+      <span class="highlight-ts">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         ${h.ts}
-      </span>` : ''}
+      </span>
       <div class="highlight-actions">
         <button class="icon-btn" title="Share">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>

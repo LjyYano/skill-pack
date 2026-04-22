@@ -1,80 +1,69 @@
 ---
 name: link-to-note
-description: Use when the user provides a URL — podcast (Apple Podcasts / Xiaoyuzhou), video (YouTube / Bilibili), or article (any web page) — and wants a structured Obsidian note. Auto-detects content type, fetches transcript/content, and produces per-type notes (rich format for podcasts, concise format for video/article).
+description: Use when the user provides a YouTube, Bilibili, Apple Podcasts, Xiaoyuzhou (小宇宙), or any yt-dlp-compatible URL and wants it summarized into a rich Obsidian note. Videos with auto-captions use the subtitle path (free, no ASR call). Audio URLs and videos without subtitles use DashScope paraformer-v2 ASR with sentence-level timestamps. Produces Summary + Takeaways + Mindmap + Chapters + Highlights + Transcript (no speaker labels). Shownotes section rendered only when the source has structured shownotes (typical for podcasts).
 ---
 
 # Link → Obsidian Note
 
 ## Overview
 
-Paste any URL → auto-detect type → fetch content → compose an Obsidian note per-type format (rich for podcast, concise for video/article).
+统一的「URL → Obsidian 笔记」工作流，覆盖视频（YouTube / Bilibili）与音频（Apple Podcasts / 小宇宙 / 其他 yt-dlp 可抓取的音频链接）。替代并合并了旧的 `video-to-note` 与 `podcast-to-note`。
 
-**Supported inputs:**
+**Transcript pipeline — 字幕优先、ASR 兜底：**
 
-| Type    | Examples                                       | Output dir       |
-|---------|------------------------------------------------|------------------|
-| podcast | Apple Podcasts, Xiaoyuzhou, Spotify, etc.      | `AI/Podcasts/`   |
-| video   | YouTube (`youtube.com`, `youtu.be`)            | `AI/YouTube/`    |
-| video   | Bilibili (`bilibili.com`, `b23.tv`)            | `AI/Bilibili/`   |
-| article | any web page                                   | `AI/Articles/`   |
+| 输入 | 路径 | 转录方式 |
+| --- | --- | --- |
+| YouTube / Bilibili，有 auto/manual subs | 字幕路径 | yt-dlp 下载字幕 + 本地解析（无 ASR 调用） |
+| YouTube / Bilibili，无字幕 | ASR 路径 | paraformer-v2 异步转写（带 sentence 时间戳） |
+| Apple Podcasts / 小宇宙 / 其他音频 URL | ASR 路径 | 同上 |
 
-**Note formats by type:** Podcast uses a rich format (摘要 + Takeaways + 思维导图 + 章节导读 + 金句 + 详细论点 + 完整转录)；Video 和 Article 使用简洁格式 (核心观点 + 结构化 sections + 转录/原文摘录)。Frontmatter 按 `type` / `platform` 区分。
+不论哪条路径，最终都归一到 `[{begin_time_ms, text}, ...]` 段落列表，后续组织笔记逻辑完全共用。
+
+**Output directory:**
+- YouTube → `AI/YouTube/`
+- Bilibili → `AI/Bilibili/`
+- Apple Podcasts / 小宇宙 → `AI/Podcasts/`
+- 其他 yt-dlp 音频 → `AI/Audio/`
+
+> **不标注说话人。** 过往尝试 ASR diarization 和从 shownotes 推断都不稳定，转录一律只保留 `**[MM:SS]** 文本`。详见 `feedback_podcast_no_speaker` 记忆。
 
 ---
 
 ## Prerequisites
 
-| 工具 | 用途 |
-|------|------|
-| `yt-dlp`           | podcast / video 元信息和下载（字幕 / 音频） |
-| `ffmpeg`           | 音频切片（仅 ASR 分片场景） |
-| `python3 + requests` | DashScope API 调用 |
-| `ALIYUN_API_KEY`   | paraformer-v2 ASR（播客 + 无字幕视频） |
-| `defuddle` CLI     | 文章正文提取（`npm install -g defuddle`） |
-| `web_reader` MCP   | 文章 defuddle 失败时的兜底 |
-| Bilibili cookies (optional) | member-only / age-restricted 视频用 `--cookies-from-browser chrome` |
+- `yt-dlp` — 元数据 + 字幕 / 音频下载（Apple Podcasts URL 通常会被解析到 xiaoyuzhoufm CDN m4a）
+- `python3` + `requests` — API 调用
+- `ALIYUN_API_KEY` — DashScope API key（paraformer-v2 异步转写）
+- 不依赖 Obsidian CLI，直接 Write 文件即可（Obsidian 会自动索引）
+- Bilibili cookies（可选）— 会员 / 年龄限制视频用 `--cookies-from-browser chrome`
+
+> **ffmpeg 不再需要。** paraformer-v2 处理整段音频，不需要本地分片。旧版 `qwen3-asr-flash` + chunking 的路径已淘汰。
 
 ---
 
-## Step 0: URL 类型判定 + 目录路由
+## Workflow
+
+### 0. 平台检测 + 路由
 
 ```python
-import re, hashlib, urllib.parse
+import re, hashlib
+
 url = "URL"
-parsed = urllib.parse.urlparse(url)
-host = parsed.netloc.lower().replace('www.', '')
-
-if re.search(r'podcasts\.apple\.com', host):
-    kind, platform, output_dir = "podcast", "apple-podcasts", "AI/Podcasts"
-elif re.search(r'xiaoyuzhoufm\.com', host):
-    kind, platform, output_dir = "podcast", "xiaoyuzhou", "AI/Podcasts"
-elif re.search(r'(youtube\.com|youtu\.be)', host):
-    kind, platform, output_dir = "video", "youtube", "AI/YouTube"
-elif re.search(r'(bilibili\.com|b23\.tv)', host):
-    kind, platform, output_dir = "video", "bilibili", "AI/Bilibili"
+if re.search(r'(youtube\.com|youtu\.be)', url):
+    platform, has_video, output_dir = "youtube", True, "AI/YouTube"
+elif re.search(r'(bilibili\.com|b23\.tv)', url):
+    platform, has_video, output_dir = "bilibili", True, "AI/Bilibili"
+elif re.search(r'podcasts\.apple\.com', url):
+    platform, has_video, output_dir = "apple-podcasts", False, "AI/Podcasts"
+elif re.search(r'xiaoyuzhoufm\.com', url):
+    platform, has_video, output_dir = "xiaoyuzhou", False, "AI/Podcasts"
 else:
-    # 交给 yt-dlp 探测：能吐元信息 → 按 podcast 处理；否则当 article。
-    import subprocess
-    probe = subprocess.run(
-        ["yt-dlp", "--dump-json", "--skip-download", url],
-        capture_output=True, text=True, timeout=30
-    )
-    if probe.returncode == 0 and probe.stdout.strip():
-        kind, platform, output_dir = "podcast", host, "AI/Podcasts"
-    else:
-        kind, platform, output_dir = "article", host, "AI/Articles"
+    platform, has_video, output_dir = "generic", False, "AI/Audio"
 
-slug = hashlib.md5(url.encode()).hexdigest()[:10]
-print(f"kind={kind} platform={platform} output_dir={output_dir} slug={slug}")
+slug = hashlib.md5(url.encode()).hexdigest()[:10]  # short slug for temp files
 ```
 
-> 路由确定后：`kind in (podcast, video)` → Section 1；`kind == article` → Section 2；两路汇合到 Section 3 compose 笔记。
-
----
-
-## Section 1: podcast / video — 元信息 + 下载 + 转录
-
-### 1.0 元信息抓取（podcast 与 video 共用）
+### 1. 元数据 + 字幕可用性
 
 ```bash
 yt-dlp --dump-json --skip-download "URL" 2>&1 | python3 -c "
@@ -82,465 +71,357 @@ import json, sys
 for line in sys.stdin.read().strip().split('\n'):
     try:
         d = json.loads(line)
-        print('TITLE:', d.get('title',''))
-        # Bilibili uses 'uploader', YouTube uses 'channel'
-        print('CHANNEL:', d.get('channel','') or d.get('uploader',''))
+        print('TITLE:', d.get('title') or d.get('episode',''))
+        print('CHANNEL:', d.get('channel','') or d.get('uploader','') or d.get('series',''))
         print('UPLOAD_DATE:', d.get('upload_date',''))
         print('DURATION:', d.get('duration_string',''))
+        print('DURATION_SEC:', d.get('duration',''))
         print('VIEW_COUNT:', d.get('view_count',''))
-        print('DESCRIPTION:', d.get('description','')[:500])
-        # Detect auto-generated subtitles (video only)
+        print('DESCRIPTION:', d.get('description','') or '')
         auto_subs = d.get('automatic_captions', {})
         manual_subs = d.get('subtitles', {})
-        if auto_subs:
-            print('AUTO_SUBS_AVAILABLE:', ','.join(auto_subs.keys()))
-        if manual_subs:
-            print('MANUAL_SUBS_AVAILABLE:', ','.join(manual_subs.keys()))
-        if not auto_subs and not manual_subs:
-            print('NO_SUBS_AVAILABLE')
+        if auto_subs:   print('AUTO_SUBS:', ','.join(auto_subs.keys()))
+        if manual_subs: print('MANUAL_SUBS:', ','.join(manual_subs.keys()))
+        if not auto_subs and not manual_subs and auto_subs is not None:
+            print('NO_SUBS')
         break
     except: continue
 "
 ```
 
-> **Bilibili:** 如下载失败（member-only / age-restricted），重试加 `--cookies-from-browser chrome`。
+> **Bilibili 下载失败：** 会员 / 年龄限制时加 `--cookies-from-browser chrome` 重试。
 
-### 1.1 分支选择
+**路径选择：**
 
-| `kind` | 字幕 | 走向 |
-|--------|------|------|
-| `video`   | 有（auto/manual 任一） | Section 1A 字幕路径 |
-| `video`   | 无                     | Section 1B ASR 路径 |
-| `podcast` | —                      | Section 1B ASR 路径 |
+| 条件 | 动作 |
+| --- | --- |
+| `has_video = True` 且有 auto/manual subs | → Step 2A 字幕路径 |
+| `has_video = True` 且 `NO_SUBS` | → Step 2B ASR 路径 |
+| `has_video = False`（音频链接） | → Step 2B ASR 路径 |
 
-**字幕优先级：** `zh-Hans` > `zh` > `en` > 首个可用。
+字幕语言优先级：`zh-Hans` > `zh` > `en` > 第一个可用。
 
----
-
-### Section 1A — 字幕路径（video only）
-
-#### 1A-1. 下载字幕
+### 2A. 字幕路径（仅视频）
 
 ```bash
 yt-dlp --write-auto-sub --sub-lang LANG --sub-format srv3/vtt/srt \
-  --skip-download -o "./.link_sub_SLUG" "URL" 2>&1 | tail -3
+  --skip-download -o "./.ltn_sub_SLUG" "URL" 2>&1 | tail -3
 ```
 
-#### 1A-2. 解析 VTT/SRT（按 timestamp gap > 3s 分段）
+解析 SRT/VTT，返回段落级时间戳列表（按 cue 间隔 > 3s 断段）：
 
 ```python
-import re, glob, json
+import re, glob
 
-def _parse_timestamp(ts_str):
-    """Parse SRT/VTT timestamp to seconds."""
-    ts_str = ts_str.strip().replace(',', '.')
-    parts = ts_str.split(':')
+def _parse_ts(s):
+    s = s.strip().replace(',', '.')
+    parts = s.split(':')
     if len(parts) == 3:
-        h, m, s = parts
-        return int(h) * 3600 + int(m) * 60 + float(s)
-    elif len(parts) == 2:
-        m, s = parts
-        return int(m) * 60 + float(s)
+        h, m, sec = parts
+        return int(h)*3600 + int(m)*60 + float(sec)
+    if len(parts) == 2:
+        m, sec = parts
+        return int(m)*60 + float(sec)
     return 0.0
 
-def _collect_cues(content, is_vtt):
-    """Return list of (start_sec, text) cues."""
-    if is_vtt:
-        content = re.sub(r'^WEBVTT.*\n\n', '', content, flags=re.DOTALL)
+def _segment(cues, gap_threshold=3.0):
+    """cues: list of (begin_sec, end_sec, text) → [{begin_time_ms, text}]."""
+    if not cues:
+        return []
+    paras, buf = [], [cues[0][2]]
+    cur_begin = cues[0][0]
+    for i in range(1, len(cues)):
+        gap = cues[i][0] - cues[i-1][1]
+        if gap > gap_threshold:
+            paras.append({"begin_time_ms": int(cur_begin*1000), "text": " ".join(buf)})
+            buf = [cues[i][2]]
+            cur_begin = cues[i][0]
+        else:
+            buf.append(cues[i][2])
+    if buf:
+        paras.append({"begin_time_ms": int(cur_begin*1000), "text": " ".join(buf)})
+    return paras
+
+def parse_sub(path):
+    with open(path, encoding='utf-8') as f:
+        content = f.read()
+    content = re.sub(r'^WEBVTT.*?\n\n', '', content, flags=re.DOTALL)
     blocks = re.split(r'\n\n+', content.strip())
-    cues = []
-    prev_text = None
-    for block in blocks:
-        parts = block.strip().split('\n')
-        ts_line = None
-        text_start = 0
-        for i, line in enumerate(parts):
+    cues, prev_text = [], None
+    for b in blocks:
+        lines = b.strip().split('\n')
+        ts_line, text_start = None, 0
+        for i, line in enumerate(lines):
             if '-->' in line:
-                ts_line = line
-                text_start = i + 1
+                ts_line, text_start = line, i + 1
                 break
         if ts_line is None:
             continue
-        start_ts = ts_line.split('-->')[0].strip()
-        start_sec = _parse_timestamp(start_ts)
-        text_lines = [l.strip() for l in parts[text_start:] if l.strip()]
+        begin_s, end_s = [_parse_ts(x) for x in ts_line.split('-->')[:2]]
+        text_lines = [l.strip() for l in lines[text_start:] if l.strip()]
         text = " ".join(text_lines)
-        if is_vtt and text == prev_text:  # VTT often repeats cues
+        if not text or text == prev_text:  # VTT 常见重复行
             continue
-        if text:
-            cues.append((start_sec, text))
-            prev_text = text
-    return cues
+        cues.append((begin_s, end_s, text))
+        prev_text = text
+    return _segment(cues)
 
-def _segment_by_gaps(cues, gap_threshold=3.0):
-    """Group cues into paragraphs based on timestamp gaps > gap_threshold seconds.
-    Output: list of {begin_ms, text}."""
-    if not cues:
-        return []
-    segments = []
-    cur_start = cues[0][0]
-    cur_lines = [cues[0][1]]
-    for i in range(1, len(cues)):
-        gap = cues[i][0] - cues[i-1][0]
-        if gap > gap_threshold:
-            segments.append({"begin_ms": int(cur_start * 1000),
-                             "text": " ".join(cur_lines)})
-            cur_start = cues[i][0]
-            cur_lines = [cues[i][1]]
-        else:
-            cur_lines.append(cues[i][1])
-    if cur_lines:
-        segments.append({"begin_ms": int(cur_start * 1000),
-                         "text": " ".join(cur_lines)})
-    return segments
-
-# Auto-detect subtitle file
-sub_files = glob.glob('./.link_sub_SLUG.*')
-segments = []
-for f in sub_files:
-    with open(f, 'r', encoding='utf-8') as fh:
-        content = fh.read()
-    if f.endswith('.vtt'):
-        segments = _segment_by_gaps(_collect_cues(content, is_vtt=True))
-        break
-    elif f.endswith('.srt'):
-        segments = _segment_by_gaps(_collect_cues(content, is_vtt=False))
-        break
-
-with open('.link_segments_SLUG.json', 'w', encoding='utf-8') as fh:
-    json.dump(segments, fh, ensure_ascii=False)
+sub_files = sorted(glob.glob('./.ltn_sub_SLUG.*'))
+paragraphs = parse_sub(sub_files[0]) if sub_files else []
 ```
 
-> **字幕分段逻辑：** 相邻 cue 时间间隔 > 3 秒即开新段，形成自然话题边界。输出 schema：`[{begin_ms, text}]`，与 ASR 路径统一。
+字幕路径完成 → 跳到 **Step 3**。
 
-字幕路径成功后跳到 **Section 3**。
+### 2B. ASR 路径（paraformer-v2 异步转写）
 
----
-
-### Section 1B — ASR 路径（podcast 或无字幕 video）
-
-#### 1B-1. 下载音频
+**下载音频：**
 
 ```bash
 yt-dlp -f "bestaudio[ext=m4a]/bestaudio" \
-  -o "./.link_audio_SLUG.%(ext)s" "URL" 2>&1 | tail -3
+  -o "./.ltn_audio_SLUG.%(ext)s" "URL" 2>&1 | tail -3
 ```
 
-#### 1B-2. paraformer-v2 异步三步上传
+**上传 + 提交转写任务：**
 
-> ⚠️ **重要警告（踩过的坑）：**
-> - **不要** 直接 `POST https://dashscope.aliyuncs.com/api/v1/uploads` —— 该端点只接受 `GET`，`POST` 会返回 `405 Method Not Allowed`。
-> - 提交转录任务时 **必须** 同时带上两个异步头：
->   - `X-DashScope-Async: enable`
->   - `X-DashScope-OssResourceResolve: enable`
-> - 否则任务不会入队，或无法解析 `oss://` 资源。
+> ⚠️ **不要直接 POST 到 `/api/v1/uploads`** — 那个 endpoint 只接受 `GET ?action=getPolicy`，直接 POST 会返回 `405 BadRequest.RequestMethodNotAllowed`。必须先 GET 拿 OSS 临时凭证 → multipart POST 到 OSS → 用 `oss://` 引用。
+>
+> 提交转写任务时必须同时带 `X-DashScope-Async: enable` 和 `X-DashScope-OssResourceResolve: enable` 两个头，否则 `oss://` URL 不会被解析。
 
 ```python
-import os, json, time, mimetypes, pathlib, requests
+import os, json, pathlib, requests, time, uuid, glob
 
 API_KEY = os.environ["ALIYUN_API_KEY"]
-AUDIO = pathlib.Path(".link_audio_SLUG.m4a")  # 按实际后缀替换
-BASE = "https://dashscope.aliyuncs.com"
-HEADERS_JSON = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+AUDIO_FILE = glob.glob("./.ltn_audio_SLUG.*")[0]
+HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+POLICY_URL = "https://dashscope.aliyuncs.com/api/v1/uploads"
+TRANSCRIBE_URL = "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription"
+TASK_URL_PREFIX = "https://dashscope.aliyuncs.com/api/v1/tasks/"
 
-# Step A: GET policy (uploads endpoint is GET-only)
-r = requests.get(
-    f"{BASE}/api/v1/uploads",
-    params={"action": "getPolicy", "model": "paraformer-v2"},
-    headers={"Authorization": f"Bearer {API_KEY}"},
-    timeout=30,
-)
-r.raise_for_status()
-pol = r.json()["data"]
-upload_host = pol["upload_host"]           # e.g. https://dashscope-file-mgr.oss-cn-beijing.aliyuncs.com
-upload_dir = pol["upload_dir"]             # OSS key prefix
-key = f"{upload_dir}/{AUDIO.name}"
+# 1) GET upload policy
+pol = requests.get(POLICY_URL, headers=HEADERS,
+    params={"action": "getPolicy", "model": "paraformer-v2"}, timeout=30
+).json()["data"]
 
-# Step B: POST multipart to OSS upload_host
-mime = mimetypes.guess_type(AUDIO.name)[0] or "audio/mpeg"
-files = {
-    "OSSAccessKeyId":         (None, pol["oss_access_key_id"]),
-    "Signature":              (None, pol["signature"]),
-    "policy":                 (None, pol["policy"]),
-    "x-oss-object-acl":       (None, pol["x_oss_object_acl"]),
-    "x-oss-forbid-overwrite": (None, pol["x_oss_forbid_overwrite"]),
-    "key":                    (None, key),
-    "success_action_status":  (None, "200"),
-    "file":                   (AUDIO.name, AUDIO.read_bytes(), mime),
-}
-up = requests.post(upload_host, files=files, timeout=600)
-assert up.status_code == 200, f"OSS upload failed: {up.status_code} {up.text[:300]}"
+# 2) multipart POST 到 OSS
+ext = pathlib.Path(AUDIO_FILE).suffix.lstrip('.') or 'm4a'
+key = f"{pol['upload_dir']}/{uuid.uuid4().hex}.{ext}"
+with open(AUDIO_FILE, "rb") as f:
+    oss_resp = requests.post(pol["upload_host"],
+        data={
+            "key": key,
+            "policy": pol["policy"],
+            "OSSAccessKeyId": pol["oss_access_key_id"],
+            "signature": pol["signature"],
+            "x-oss-object-acl": pol["x_oss_object_acl"],
+            "x-oss-forbid-overwrite": pol["x_oss_forbid_overwrite"],
+            "success_action_status": "200",
+        },
+        files={"file": ("audio." + ext, f, "audio/mp4" if ext == "m4a" else "application/octet-stream")},
+        timeout=600,
+    )
+assert oss_resp.status_code in (200, 204), f"OSS upload failed: {oss_resp.status_code} {oss_resp.text[:200]}"
 file_url = f"oss://{key}"
-print("Uploaded:", file_url)
 
-# Step C: POST transcription task (BOTH async headers REQUIRED)
-headers_task = {
-    **HEADERS_JSON,
-    "X-DashScope-Async": "enable",
-    "X-DashScope-OssResourceResolve": "enable",
-}
-body = {
-    "model": "paraformer-v2",
-    "input": {"file_urls": [file_url]},
-    "parameters": {
-        "sentence_timestamps": True,
-        "language_hints": ["zh", "en"],
+# 3) 提交转写任务
+trans = requests.post(TRANSCRIBE_URL,
+    headers={**HEADERS, "Content-Type": "application/json",
+             "X-DashScope-Async": "enable",
+             "X-DashScope-OssResourceResolve": "enable"},
+    json={
+        "model": "paraformer-v2",
+        "input": {"file_urls": [file_url]},
+        "parameters": {"sentence_timestamps": True, "language_hints": ["zh", "en"]},
     },
-}
-tr = requests.post(
-    f"{BASE}/api/v1/services/audio/asr/transcription",
-    headers=headers_task, json=body, timeout=60,
-)
-tr.raise_for_status()
-task_id = tr.json()["output"]["task_id"]
-print("task_id:", task_id)
+    timeout=60,
+).json()
+task_id = trans["output"]["task_id"]
 
-# Step D: Poll until SUCCEEDED
-while True:
-    q = requests.get(f"{BASE}/api/v1/tasks/{task_id}",
-                     headers={"Authorization": f"Bearer {API_KEY}"}, timeout=30)
-    q.raise_for_status()
-    status = q.json()["output"]["task_status"]
-    print("status:", status)
-    if status in ("SUCCEEDED", "FAILED", "CANCELED"):
+# 4) 轮询（每 3s 一次；长音频可调大次数）
+for poll in range(200):
+    time.sleep(3)
+    task = requests.get(f"{TASK_URL_PREFIX}{task_id}", headers=HEADERS, timeout=30).json()
+    status = task["output"]["task_status"]
+    if poll % 5 == 0:
+        print(f"Poll {poll}: {status}")
+    if status == "SUCCEEDED":
+        result_url = task["output"]["results"][0]["transcription_url"]
+        result = requests.get(result_url, timeout=60).json()
+        # result["transcripts"][0]["sentences"]:
+        # [{"sentence_id":1,"begin_time":0,"end_time":2840,"text":"..."}, ...]
+        sentences = result["transcripts"][0]["sentences"]
+        pathlib.Path(".ltn_asr_SLUG.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
         break
-    time.sleep(5)
-
-assert status == "SUCCEEDED", f"ASR task ended with {status}"
-# Result JSON is hosted; fetch and parse transcripts[0].sentences
-result_url = q.json()["output"]["results"][0]["transcription_url"]
-result = requests.get(result_url, timeout=60).json()
-sentences = result["transcripts"][0]["sentences"]
-
-# Step E: Convert to unified schema [{begin_ms, text}]
-segments = [{"begin_ms": s["begin_time"], "text": s["text"]} for s in sentences]
-with open(".link_segments_SLUG.json", "w", encoding="utf-8") as fh:
-    json.dump(segments, fh, ensure_ascii=False)
+    elif status in ("FAILED", "CANCELED"):
+        raise RuntimeError(f"ASR {status}: {json.dumps(task, ensure_ascii=False)[:500]}")
 ```
 
-> **长音频分片（可选）：** 单个音频过大时先用 `ffmpeg -i .link_audio_SLUG.m4a -ac 1 -f segment -segment_time 300 -c:a mp3 -q:a 5 -y ".link_chunks_SLUG/chunk_%04d.mp3"` 按 5 分钟切段，然后逐段走上面三步（或并发，`max_workers ≤ 3`），最后按 `begin_ms` 偏移合并。
-
----
-
-## Section 2: article — 正文提取
-
-### 2.1 抽取正文（首选 defuddle CLI）
-
-```bash
-defuddle parse "URL" --md -o ./.link_article_SLUG.md 2>&1
-defuddle parse "URL" -p title 2>&1
-defuddle parse "URL" -p description 2>&1
-defuddle parse "URL" -p author 2>&1
-defuddle parse "URL" -p date 2>&1
-```
-
-**兜底：** defuddle 失败（未安装 / 网络错误 / 付费墙 / 动态渲染）→ 用 `mcp__web_reader__webReader`：
-
-```
-URL: <article URL>
-return_format: markdown
-retain_images: true
-```
-
-从工具返回读取 markdown 内容。
-
-### 2.2 解析 metadata + 计算 reading_time
+**合并 sentence 为话题段落**（paraformer-v2 的 `sentences` 粒度偏短，合并成长段便于阅读）：
 
 ```python
-import re
+def merge_sentences(sentences, gap_threshold_ms=1500, max_chars=400):
+    """合并短句为段落：遇到 sentence gap > 1.5s 或当前段 > 400 字就断段。"""
+    paras, buf, cur_begin, cur_end = [], [], None, None
+    for s in sentences:
+        if cur_begin is None:
+            cur_begin, cur_end = s["begin_time"], s["end_time"]
+            buf.append(s["text"])
+            continue
+        gap = s["begin_time"] - cur_end
+        cur_len = sum(len(x) for x in buf)
+        if gap > gap_threshold_ms or cur_len > max_chars:
+            paras.append({"begin_time_ms": cur_begin, "text": "".join(buf)})
+            buf, cur_begin = [s["text"]], s["begin_time"]
+        else:
+            buf.append(s["text"])
+        cur_end = s["end_time"]
+    if buf:
+        paras.append({"begin_time_ms": cur_begin, "text": "".join(buf)})
+    return paras
 
-with open('./.link_article_SLUG.md', 'r', encoding='utf-8') as f:
-    content = f.read()
-
-# 如果 defuddle -p 没给到，从正文推断：
-# - title: 优先 defuddle -p title；否则 content 首个 <h1>
-# - author: 优先 defuddle -p author；否则 byline
-# - description: 优先 defuddle -p description；否则首段
-date_match = re.search(r'(\d{4}[-/]\d{2}[-/]\d{2})', content[:2000])
-publish_date = date_match.group(1).replace('/', '-') if date_match else ''
-
-# Reading time: 中文 400 字/分钟；英文 200 词/分钟
-char_count = len(content)
-if re.search(r'[一-鿿]', content):
-    reading_time = max(1, round(char_count / 400))
-else:
-    reading_time = max(1, round(len(content.split()) / 200))
-print(f"Content: {char_count} chars, reading_time: {reading_time} min")
+paragraphs = merge_sentences(sentences)
 ```
 
-已知域名可映射为更友好的 `platform` 值（`medium.com`→`Medium`，`mp.weixin.qq.com`→`微信公众号`，`zhuanlan.zhihu.com`→`知乎专栏`，`juejin.cn`→`掘金`，`sspai.com`→`少数派`，`36kr.com`→`36氪`，`arxiv.org`→`arXiv`，`blog.csdn.net`→`CSDN` 等）；未知则用 host。
+> **为什么用 paraformer-v2 而不是 qwen3-asr-flash：** `qwen3-asr-flash`（chat completions API）不返回时间戳，且 ≤10MB 要分片。`paraformer-v2`（异步转写 API）支持 `sentence_timestamps`，一次处理完整音频，返回每句真实 begin/end（毫秒）。
 
+> **隐私与保留策略：** 上传到 DashScope 托管 OSS（private bucket），`oss://` 对外无法访问；文件本体 **48 小时后自动清理**，上传凭证 ~1 小时后失效。机密音频请改用本地 FunASR / Whisper。
+
+### 3. 组织笔记
+
+拿到 `paragraphs = [{begin_time_ms, text}, ...]` 后：
+- 提取 **chapters**（3–8 行逻辑分段，章节时间取对应段的 begin_time_ms）
+- 提取 **highlights**（3–8 条金句，时间锚定到对应段）
+- 生成 **思维导图**（markmap 代码块，覆盖所有要点不遗漏）
+- 组装 **完整转录**（每段前加 `**[MM:SS]**`，段间空行）
+
+**Template:**
+
+```markdown
 ---
-
-## Section 3: Compose 笔记（按类型分格式）
-
-根据 `kind` 变量（`podcast` / `video` / `article`），选择不同的笔记模板。
-
-### 3A. Podcast 笔记（富格式）
-
-**Frontmatter：**
-
-```yaml
----
-title: <title>
-tags: [<inferred topic tags>]
-source: <url>
-author: <series or host>
-date: <YYYY-MM-DD>
-type: 播客笔记
-platform: <apple-podcasts | xiaoyuzhou | ...>
-duration: "HH:MM"
-transcript_source: asr
-dialogue: true                             # 多人对话时才加
+title: <episode/video title>
+tags:
+  - <视频笔记 | 播客笔记>
+  - <topic tags>
+source: <original url>
+author: <channel/series/uploader>
+date: <YYYY-MM-DD from upload_date>
+duration: "HH:MM" or "MM:SS"
+type: <视频笔记 | 播客笔记>
+platform: <youtube|bilibili|apple-podcasts|xiaoyuzhou|generic>
+transcript_source: <subtitle|asr>
 markmap:
   initialExpandLevel: 3
 ---
-```
 
-**章节骨架（完整富格式）：**
-
-| 章节 | 说明 |
-|------|------|
-| `> [!info] 播客信息` | 节目·时长·发布日期·链接，1 句简介 |
-| `## Shownotes` | 从 description 提取（主播/延伸资料/后期制作等），`> [!info]- 节目 Shownotes` 折叠 callout。若 description 无结构信息则省略 |
-| `## 摘要` + Takeaways | 3–5 句整体摘要 + `> [!summary] Takeaways` 5–8 条要点 |
-| `## 思维导图` | ````markmap` 代码块，根 1，一级 3–8，二三级覆盖细节不遗漏 |
-| `## 章节导读` | 表格 `| MM:SS | 章节 | 概述 |`，3–8 行 |
-| `## 金句 Highlights` | `> [!quote] ~ MM:SS` callout，3–8 条 |
-| `## 详细论点` | 按 `###` 展开核心论证 |
-| `## 个人思考` | checkbox 列表 |
-| `## 完整转录` | `> [!note]- 完整转录` 折叠，`**[MM:SS]** **说话人：** <text>`（dialogue 时加说话人），不同段落空行分隔。> 20000 字符写占位 |
-
-**时间戳来源：** ASR paraformer-v2 返回的 `sentence_timestamps` 中 `begin_time`（毫秒 → `MM:SS`），禁止按语速估算。
-
-### 3B. Video 笔记（简洁格式）
-
-**Frontmatter：**
-
-```yaml
----
-title: <title>
-tags: [<inferred topic tags>]
-source: <url>
-author: <channel or uploader>
-date: <YYYY-MM-DD>
-type: 视频笔记
-platform: <youtube | bilibili>
-duration: "HH:MM"
-transcript_source: <subtitle | asr>
----
-```
-
-**章节骨架（简洁格式）：**
-
-```markdown
 # <title>
 
-> [!info] 视频信息
-> author / duration / date / [link](URL)
+> [!info] <视频信息|播客信息>
+> <节目/频道名> · 时长 <duration> · 发布 <date> · [原始链接](<url>)
+>
+> <1–2 句话简介，基于 description 字段>
 
-## 核心观点
-[1-3 sentence summary]
+## Shownotes  <!-- 仅当 description 中有结构化 shownotes 时渲染；视频类通常省略 -->
 
-## [Section headers inferred from transcript content]
-[Structured summary with callouts, tables, lists]
+> [!info]- 节目 Shownotes
+> **主播：** <host names>
+>
+> **延伸资料**
+> - [<reference title>](<url>)
+>
+> **后期制作：** <name> · **声音设计：** <name>
+>
+> **收听平台：** <小宇宙、苹果播客、Spotify、…>
+
+## 摘要
+
+<一段 3–5 句的整体摘要。>
+
+> [!summary] Takeaways
+> - 要点 1
+> - 要点 2
+> - 要点 3
+> - 要点 4
+> - 要点 5（5–8 条为宜）
+
+## 思维导图
+
+```markmap
+# <核心主题>
+## <章节 1>
+### <子节点>
+#### <细节>
+## <章节 2>
+### <子节点>
+## <章节 3>
+### <子节点>
+```
+
+## 章节导读
+
+| 时间 | 章节 | 概述 |
+| --- | --- | --- |
+| 00:00 | <标题> | <一句话> |
+| MM:SS | <标题> | <一句话> |
+
+## 金句 Highlights
+
+> [!quote] ~ MM:SS
+> <金句原文>
+
+> [!quote] ~ MM:SS
+> <金句原文>
+
+<3–8 条>
+
+## 详细论点
+
+### <论点 1 标题>
+
+<展开，可以用 callout / 表格 / 列表。>
+
+### <论点 2 标题>
+
+...
 
 ## 个人思考
-- [ ] Action items
 
-## 原始转录
+- [ ] <行动项或延伸思考>
+- [ ] <延伸阅读建议>
 
-> [!note]-
-> 第一段转录内容……
+## 完整转录
+
+> [!note]- 完整转录
+> **[00:00]** <第一段文本（合并若干连续句子，自然段）>
 >
-> 第二段转录内容……
-```
-
-**Transcript storage rule:** If transcript exceeds **20000 characters**, do NOT save it — write `> 转录内容过长（N 字符），未保存。可从 [原视频](URL) 获取。`. Under 20000 chars, embed in collapsible callout with logical paragraph breaks.
-
-**Transcript segmentation:** 转录按**内容逻辑**分段，而非时间或字数机械切割。ASR 分片的 `\n\n` 拼接只是中间产物，写入前必须通读全文在话题转换处断段。一般 20-30 分钟视频分成 15-25 段。
-
-### 3C. Article 笔记（简洁格式）
-
-**Frontmatter：**
-
-```yaml
----
-title: <title>
-tags: [<inferred topic tags>]
-source: <url>
-author: <author>
-date: <YYYY-MM-DD>
-type: 文章笔记
-platform: <domain>
-reading_time: <N> min
----
-```
-
-**章节骨架（简洁格式）：**
-
-```markdown
-# <title>
-
-> [!info] 文章信息
-> author / reading time / date / [link](URL)
-
-## 核心观点
-[1-3 sentence summary of the article's main argument]
-
-## [Section headers inferred from article content]
-[Structured summary with callouts, tables, lists]
-
-## 个人思考
-- [ ] Action items
-
-## 原文摘录
-
-> [!note]-
-> 摘录内容段落一……
+> **[00:20]** <下一段，按话题自然断段>
 >
-> 摘录内容段落二……
+> **[01:00]** <又一段>
+>
+> ...
 ```
 
-**Content storage rule:** If original content exceeds **20000 characters**, write `> 原文内容过长（N 字符），未保存。可从 [原文链接](URL) 获取。`. Under 20000 chars, embed in collapsible callout with logical paragraph breaks.
+**Composition rules:**
 
-**Content segmentation:** 原文摘录按**内容逻辑**分段，每 1000–2000 字一段，每段应是一个完整的论点或话题。过长且价值较低的部分可省略用 `[...省略...]` 标注。
+- **Shownotes** 节可选：`has_video = False` 且 description 中能提取出结构化信息（主播 / 延伸资料 / 收听平台等）才渲染；视频平台通常省略此节。
+- **frontmatter**：`type` 和第一个 `tag` 根据 `has_video` 设为「视频笔记」或「播客笔记」；`transcript_source` 设为 `subtitle` 或 `asr`。
+- **思维导图** 用 `markmap` 代码块（不是 Mermaid），用 markdown 标题层级表示节点层级。根 `#` 为核心主题，一级 `##` 为 3–8 个章节，二级/三级为细节。要覆盖视频/播客中每个要点不遗漏。
+- **initialExpandLevel** 在 frontmatter 里设为 `3`。
+- **时间戳来源**：段落 `begin_time_ms` 毫秒转 `MM:SS`，不要根据语速估算。章节时间 / 金句时间均锚定到对应段的 begin_time_ms。
+- **金句** 3–8 条，选观点最凝练、最有传播力的句子，尽量保留原文措辞。
+- **章节导读** 3–8 行。
+- **转录格式**：
+  - callout 标题只用「完整转录」，不加模型名 / 段时长 / 括号。
+  - 每段前加 `**[MM:SS]** `，段间用 `>` 空行 `>` 隔开。
+  - **不加说话人标签**。多人对话播客也不猜、不标。
+  - **按话题自然断段**。ASR 路径的 sentence 已在 Step 2B 合并；字幕路径的 cue 已按 >3s 间隔分段。写入前仍可检查是否有跨段语句需要合并或过长段需要拆分。
+- **字符上限**：转录 ≤ 20000 字符直接嵌入折叠 callout；> 20000 字符写 `> 转录过长（N 字符），未保存。从 [原链接](URL) 回听。`
 
-**Write 文件：**
-
-```python
-import pathlib, re
-safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)  # 去掉 Windows 不合法字符
-pathlib.Path(f"{output_dir}/{safe_title}.md").write_text(note_md, encoding="utf-8")
-```
-
-> **Why direct Write:** Obsidian CLI 的 `content` 参数受 shell 长度限制，长转录会截断；直接写文件无此限制，Obsidian 会自动检测变化。
-
----
-
-## Cleanup
-
-清理临时文件（`rm -rf` 被 hook 阻止，必须用 Python）：
+### 4. 清理临时文件
 
 ```python
 import os, glob
 slug = "SLUG"
-
-# audio/video 临时文件
-for pat in (f'.link_sub_{slug}*', f'.link_audio_{slug}*', f'.link_segments_{slug}*'):
+for pat in [f'.ltn_sub_{slug}*', f'.ltn_audio_{slug}*', f'.ltn_asr_{slug}*']:
     for f in glob.glob(pat):
-        if os.path.isfile(f):
-            os.remove(f)
-
-chunk_dir = f'.link_chunks_{slug}'
-if os.path.isdir(chunk_dir):
-    for f in glob.glob(f'{chunk_dir}/*'):
-        os.remove(f)
-    os.rmdir(chunk_dir)
-
-# article 临时文件
-for f in glob.glob(f'.link_article_{slug}*'):
-    if os.path.isfile(f):
         os.remove(f)
 ```
 
@@ -549,33 +430,38 @@ for f in glob.glob(f'.link_article_{slug}*'):
 ## Common Errors
 
 | Error | Cause | Fix |
-|-------|-------|-----|
-| `401 Unauthorized` (DashScope) | `ALIYUN_API_KEY` 未加载到 shell | 设置 env 后重启 Claude Code |
-| `405 Method Not Allowed` on `/api/v1/uploads` | 用了 `POST` | 该端点只接受 `GET`（`action=getPolicy&model=paraformer-v2`） |
-| ASR 任务不入队 / 资源解析失败 | 缺少异步头 | 同时带 `X-DashScope-Async: enable` 和 `X-DashScope-OssResourceResolve: enable` |
-| OSS 上传失败（403 / signature mismatch） | policy 字段没按原样回传 | multipart 里照抄 `getPolicy` 返回的 `policy/signature/OSSAccessKeyId/x-oss-*/key/success_action_status` |
-| `400 invalid request`（ASR 分片） | 单段过大 | 用 ffmpeg 切 5 分钟一段 |
-| `429` rate limit | 并发过高 | 降到 2–3 并发（`max_workers ≤ 3`） |
-| 字幕解析为空 | 格式不合预期 | `--sub-format` 换 `srv3` / `vtt` / `srt` 挨个试 |
-| `defuddle: command not found` | 未装 | `npm install -g defuddle` |
-| 文章抽取是 HTML 不是 markdown | defuddle 失败 | 切 `web_reader` MCP，`return_format: markdown` |
-| Bilibili 下载失败 | 会员 / 年龄限制 | 重试加 `--cookies-from-browser chrome` |
-| `rm -rf` 被拦 | 安全 hook | 用 Python `os.remove` + `os.rmdir` |
-| 标题含特殊字符 / 过长中文 | 文件系统不容 | `safe_title = re.sub(r'[\\/:*?"<>\|]', '_', title)` |
+| --- | --- | --- |
+| `401` | `ALIYUN_API_KEY` not loaded | Restart Claude Code after setting env |
+| `405 BadRequest.RequestMethodNotAllowed` on `/api/v1/uploads` | 直接 POST 到 uploads endpoint | 按 Step 2B 流程：先 `GET ?action=getPolicy`，再 multipart POST 到 `upload_host`，最后用 `oss://` 引用 |
+| Submit 200 但 task FAILED with `InvalidFile` | 缺 `X-DashScope-OssResourceResolve: enable` 头 | 补上请求头 |
+| Upload fails | 文件过大或格式不支持 | 检查文件（<500MB）和格式（m4a / mp3 / wav） |
+| Task FAILED | 音频质量差或语言不支持 | 加 `language_hints`；或本地预处理 |
+| Task 轮询超时 | 长音频处理慢 | 增大 poll 次数（200 次 ~ 10 分钟） |
+| Subtitle parse 空 | 字幕格式异常 | 换 `--sub-format`（srv3 > vtt > srt） |
+| Bilibili 下载失败 | 会员 / 年龄限制 | 加 `--cookies-from-browser chrome` |
+| 长中文文件名在 shell 中报错 | 临时文件命名 | 所有临时文件用 `slug`（MD5 前 10 位），只有最终 `.md` 用真实标题 |
+| `rm -rf` 被 hook 拦截 | 安全 | 用 Python `os.remove` |
 
 ---
 
 ## Quick Reference
 
 ```
-URL → detect kind (podcast / video / article)
-    → podcast : yt-dlp audio → paraformer-v2 ASR (sentence_timestamps)
-    → video   : yt-dlp → subtitle preferred → ASR fallback
-    → article : defuddle → web_reader fallback
-    → compose note per-type format:
-        • podcast → rich (摘要 + Takeaways + 思维导图 + 章节导读 + 金句 + 详细论点 + 转录)
-        • video   → concise (核心观点 + sections + 转录)
-        • article → concise (核心观点 + sections + 原文摘录)
-    → write AI/<type-dir>/<title>.md
+URL → platform detect (YouTube / Bilibili / Apple Podcasts / 小宇宙 / generic)
+    → yt-dlp metadata (+ subtitle availability for videos)
+    → transcript pipeline:
+        ├─ 视频 + 有字幕  → yt-dlp --write-auto-sub → parse → [{begin_time_ms, text}]
+        └─ 视频无字幕 或 音频 → yt-dlp audio → paraformer-v2 async → merge_sentences → [{begin_time_ms, text}]
+    → compose note (shownotes[optional] + summary + takeaways + mindmap
+                    + chapters + highlights + details + thoughts + transcript)
+    → Write AI/{YouTube|Bilibili|Podcasts|Audio}/<title>.md
     → cleanup temp files
 ```
+
+---
+
+## When Not to Use
+
+- URL 是普通文章 / 博客 → 用 `article-to-note`
+- URL 是纯文本 PDF / 网页文档 → 用 `defuddle` + 手动整理
+- 需要 HTML 可视化播客页 → 先用此 skill 生成 `.md`，再调用 `podcast-to-html`

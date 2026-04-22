@@ -8,8 +8,9 @@
 
 | Skill | 说明 |
 |-------|------|
-| [link-to-note](skills/link-to-note/SKILL.md) | 将任意 URL（播客 / 视频 / 文章）转为结构化 Obsidian 笔记 |
-| [link-to-html](skills/link-to-html/SKILL.md) | 将任意 URL 或 Obsidian 笔记转为 Podwise 风格的独立 HTML 展示页面 |
+| [video-to-note](skills/video-to-note/SKILL.md) | 将 YouTube / Bilibili 视频 URL 转为 Obsidian 笔记（字幕优先，ASR 兜底） |
+| [link-to-note](skills/link-to-note/SKILL.md) | 将播客 / 视频 URL（YouTube / Bilibili / Apple Podcasts / 小宇宙）转为结构化 Obsidian 笔记 |
+| [link-to-html](skills/link-to-html/SKILL.md) | 将播客 / 视频 URL 或已有 Obsidian 笔记转为 Podwise 风格的独立 HTML 展示页面 |
 | [article-to-anki](skills/article-to-anki/SKILL.md) | 将网页文章转为 Anki 卡片（Markdown 格式，可导入 Anki） |
 
 ## 安装
@@ -42,7 +43,8 @@ curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh 
 ### 手动安装
 
 ```bash
-cp -r skills/link-to-note   ~/.claude/skills/
+cp -r skills/video-to-note   ~/.claude/skills/
+cp -r skills/link-to-note    ~/.claude/skills/
 cp -r skills/link-to-html    ~/.claude/skills/
 cp -r skills/article-to-anki ~/.claude/skills/
 ```
@@ -52,12 +54,13 @@ cp -r skills/article-to-anki ~/.claude/skills/
 ### link-to-note 示例
 
 ```sh
-/link-to-note https://mp.weixin.qq.com/s/Ld_NbZZaYd2z9qpfMxP_aQ
 /link-to-note https://podcasts.apple.com/cn/podcast/.../id1552904790?i=1000755467027
+/link-to-note https://www.xiaoyuzhoufm.com/episode/xxx
+/link-to-note https://www.youtube.com/watch?v=xxx
 /link-to-note https://www.bilibili.com/video/BV1rxqmBhE91/
 ```
 
-> 输入任意 URL（文章 / 播客 / 视频）→ skill 自动识别类型 → 提取内容 → 输出包含摘要、要点、思维导图、金句和转录/全文的结构化 Obsidian 笔记。
+> 输入播客 / 视频 URL → skill 自动识别平台 → 字幕优先获取转录（无字幕则 ASR 兜底）→ 输出包含摘要、要点、思维导图、章节、金句和完整转录的 Obsidian 笔记。
 
 <details>
 <summary>查看截图</summary>
@@ -68,7 +71,7 @@ cp -r skills/article-to-anki ~/.claude/skills/
 
 #### ASR 配置（无字幕时需要）
 
-当视频没有字幕时，skill 会使用阿里云 DashScope 的 `qwen3-asr-flash` 模型进行语音识别，需要配置 API Key。
+当视频没有字幕，或输入为播客 / 音频 URL 时，skill 会使用阿里云 DashScope 的 `paraformer-v2` 模型进行异步语音识别，需要配置 API Key。
 
 **1. 获取 API Key**
 
@@ -95,16 +98,17 @@ echo $ALIYUN_API_KEY
 
 输出非空即表示配置成功。
 
-**其他依赖（ASR 路径需要）**
+**其他依赖**
 
 ```bash
 # macOS
-brew install yt-dlp ffmpeg
+brew install yt-dlp
 
 # 验证
 yt-dlp --version
-ffmpeg -version
 ```
+
+> `ffmpeg` 不再需要。`paraformer-v2` 直接处理整段音频，无需本地分片。
 
 ### link-to-html 示例
 
@@ -112,7 +116,7 @@ ffmpeg -version
 /link-to-html https://podcasts.apple.com/cn/podcast/%E5%95%86%E4%B8%9A%E5%B0%8F%E6%A0%B735-%E9%9C%8D%E5%B0%94%E6%9C%A8%E5%85%B9%E6%B5%B7%E5%B3%A1%E4%B8%8A%E7%9A%84%E7%89%B9%E6%AE%8A%E4%BF%9D%E9%99%A9/id1552904790?i=1000755467027
 ```
 
-> 输入任意 URL 或已有 Obsidian 笔记路径 → skill 生成 Podwise 风格的独立 HTML 页面，包含侧边栏、6 个标签页（摘要、思维导图、转录/全文、关键词、金句、信息）、深色/浅色主题切换和交互式 markmap。
+> 输入播客 / 视频 URL（自动先调用 `link-to-note` 生成笔记）或已有 `.md` 笔记路径 → skill 生成 Podwise 风格的独立 HTML 页面，包含侧边栏、6 个标签页（摘要、思维导图、转录、关键词、金句、Shownotes）、深色/浅色主题切换和交互式 markmap。
 
 <video src="https://github.com/LjyYano/skill-pack/raw/main/assets/examples/podcast-to-html.mp4" controls width="100%"></video>
 

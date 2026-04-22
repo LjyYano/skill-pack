@@ -3,6 +3,7 @@ set -e
 
 REPO="https://raw.githubusercontent.com/LjyYano/skill-pack/main"
 SKILLS=(
+  "video-to-note"
   "link-to-note"
   "link-to-html"
   "article-to-anki"
