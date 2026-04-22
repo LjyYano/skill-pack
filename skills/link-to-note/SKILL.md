@@ -1,13 +1,13 @@
 ---
 name: link-to-note
-description: Use when the user provides a URL — podcast (Apple Podcasts / Xiaoyuzhou), video (YouTube / Bilibili), or article (any web page) — and wants a structured Obsidian note. Auto-detects content type, fetches transcript/content, and produces a unified rich note (Summary + Takeaways + Mindmap + Highlights + Transcript/Full-text).
+description: Use when the user provides a URL — podcast (Apple Podcasts / Xiaoyuzhou), video (YouTube / Bilibili), or article (any web page) — and wants a structured Obsidian note. Auto-detects content type, fetches transcript/content, and produces per-type notes (rich format for podcasts, concise format for video/article).
 ---
 
 # Link → Obsidian Note
 
 ## Overview
 
-Paste any URL → auto-detect type → fetch content → compose a rich Obsidian note in a unified schema.
+Paste any URL → auto-detect type → fetch content → compose an Obsidian note per-type format (rich for podcast, concise for video/article).
 
 **Supported inputs:**
 
@@ -18,7 +18,7 @@ Paste any URL → auto-detect type → fetch content → compose a rich Obsidian
 | video   | Bilibili (`bilibili.com`, `b23.tv`)            | `AI/Bilibili/`   |
 | article | any web page                                   | `AI/Articles/`   |
 
-**Unified note schema:** 摘要 + Takeaways + 思维导图 + （章节导读，仅 audio/video）+ 金句 Highlights + 详细论点 + 个人思考 + 完整转录/原文。所有类型共用同一 frontmatter（区分由 `type` / `platform` 字段承担）。
+**Note formats by type:** Podcast uses a rich format (摘要 + Takeaways + 思维导图 + 章节导读 + 金句 + 详细论点 + 完整转录)；Video 和 Article 使用简洁格式 (核心观点 + 结构化 sections + 转录/原文摘录)。Frontmatter 按 `type` / `platform` 区分。
 
 ---
 
@@ -372,61 +372,139 @@ print(f"Content: {char_count} chars, reading_time: {reading_time} min")
 
 ---
 
-## Section 3: Compose 富笔记（统一 schema）
+## Section 3: Compose 笔记（按类型分格式）
 
-**Frontmatter 模板（所有类型通用）：**
+根据 `kind` 变量（`podcast` / `video` / `article`），选择不同的笔记模板。
+
+### 3A. Podcast 笔记（富格式）
+
+**Frontmatter：**
 
 ```yaml
 ---
 title: <title>
 tags: [<inferred topic tags>]
 source: <url>
-author: <播客节目名 / 视频频道 / 文章作者>
+author: <series or host>
 date: <YYYY-MM-DD>
-type: 播客笔记 | 视频笔记 | 文章笔记
-platform: <apple-podcasts | xiaoyuzhou | youtube | bilibili | <domain>>
-# 类型相关（按需）：
-duration: "HH:MM"                         # audio/video only
-reading_time: <N> min                     # article only
-transcript_source: asr | subtitle         # audio/video only
-dialogue: true                             # 多人对话才加
+type: 播客笔记
+platform: <apple-podcasts | xiaoyuzhou | ...>
+duration: "HH:MM"
+transcript_source: asr
+dialogue: true                             # 多人对话时才加
 markmap:
   initialExpandLevel: 3
 ---
 ```
 
-**章节骨架：**
+**章节骨架（完整富格式）：**
 
-| 章节 | podcast | video | article | 说明 |
-|------|---------|-------|---------|------|
-| `> [!info] <X>信息` | ✓ | ✓ | ✓ | 一句简介 |
-| `## Shownotes` | ✓ | — | — | 播客才有（从 description 提炼：主播 / 延伸资料 / 后期制作等） |
-| `## 摘要` + Takeaways | ✓ | ✓ | ✓ | 3–5 句摘要 + 5–8 条要点 |
-| `## 思维导图`（markmap） | ✓ | ✓ | ✓ | 根节点 1，一级 3–8，二三级覆盖细节不遗漏 |
-| `## 章节导读` | ✓ | ✓ | — | 表格 `\| MM:SS \| 章节 \| 概述 \|` |
-| `## 金句 Highlights` | `~ MM:SS` | `~ MM:SS` | 无时间戳 | 3–8 条 |
-| `## 详细论点` | ✓ | ✓ | ✓ | `###` 展开核心论证 |
-| `## 个人思考` | ✓ | ✓ | ✓ | checkbox 列表 |
-| `## 完整转录` / `## 原文` | 带说话人+时间戳 | 带 cue/句级时间戳 | 纯段落 | > 20000 字符写占位 |
+| 章节 | 说明 |
+|------|------|
+| `> [!info] 播客信息` | 节目·时长·发布日期·链接，1 句简介 |
+| `## Shownotes` | 从 description 提取（主播/延伸资料/后期制作等），`> [!info]- 节目 Shownotes` 折叠 callout。若 description 无结构信息则省略 |
+| `## 摘要` + Takeaways | 3–5 句整体摘要 + `> [!summary] Takeaways` 5–8 条要点 |
+| `## 思维导图` | ````markmap` 代码块，根 1，一级 3–8，二三级覆盖细节不遗漏 |
+| `## 章节导读` | 表格 `| MM:SS | 章节 | 概述 |`，3–8 行 |
+| `## 金句 Highlights` | `> [!quote] ~ MM:SS` callout，3–8 条 |
+| `## 详细论点` | 按 `###` 展开核心论证 |
+| `## 个人思考` | checkbox 列表 |
+| `## 完整转录` | `> [!note]- 完整转录` 折叠，`**[MM:SS]** **说话人：** <text>`（dialogue 时加说话人），不同段落空行分隔。> 20000 字符写占位 |
 
-**时间戳规则：**
+**时间戳来源：** ASR paraformer-v2 返回的 `sentence_timestamps` 中 `begin_time`（毫秒 → `MM:SS`），禁止按语速估算。
 
-- audio/video 时间戳取自 ASR `begin_time`（毫秒）或字幕 cue 的 start（秒），统一转 `MM:SS`。
-- **禁止**按语速估算。
-- 文章无时间戳，章节导读 + 转录跳转控件均省略。
+### 3B. Video 笔记（简洁格式）
 
-**转录 / 原文格式：**
+**Frontmatter：**
 
-- **audio/video**：每段 `**[MM:SS]** **说话人：** <text>`，说话人只在 `dialogue: true` 时出现；段落间空行分隔。
-- **article**：按话题逻辑分段，`>` 引用，段落间空行分隔。
-- **超长处理**：> 20000 字符不嵌入，写 `> <转录|原文>过长（N 字符），未保存。可从 [原始链接](URL) 获取。`。
+```yaml
+---
+title: <title>
+tags: [<inferred topic tags>]
+source: <url>
+author: <channel or uploader>
+date: <YYYY-MM-DD>
+type: 视频笔记
+platform: <youtube | bilibili>
+duration: "HH:MM"
+transcript_source: <subtitle | asr>
+---
+```
 
-**分段粒度（非常重要）：**
+**章节骨架（简洁格式）：**
 
-- **ASR 路径**：ASR 句级时间戳只是中间产物。写入笔记前必须通读全文，在话题转换处断段（新论点提出、举例结束回到主旨、从一种类型切换到另一种类型）。跨分片边界的句子（例如"不同的哲学家给出了。\n\n不同的应对策略"）必须合并为完整句子。
-- **字幕路径**：timestamp gap > 3s 分段是初步结果；写入前同样要按话题边界校正，过短合并、过长混合段拆分。
-- **article**：按话题逻辑分段，一般每 1000–2000 字一段；大段代码或冗长数据列可用 `[...省略...]` 标注。
-- **粒度参考**：20–30 分钟音视频 → 15–25 段。
+```markdown
+# <title>
+
+> [!info] 视频信息
+> author / duration / date / [link](URL)
+
+## 核心观点
+[1-3 sentence summary]
+
+## [Section headers inferred from transcript content]
+[Structured summary with callouts, tables, lists]
+
+## 个人思考
+- [ ] Action items
+
+## 原始转录
+
+> [!note]-
+> 第一段转录内容……
+>
+> 第二段转录内容……
+```
+
+**Transcript storage rule:** If transcript exceeds **20000 characters**, do NOT save it — write `> 转录内容过长（N 字符），未保存。可从 [原视频](URL) 获取。`. Under 20000 chars, embed in collapsible callout with logical paragraph breaks.
+
+**Transcript segmentation:** 转录按**内容逻辑**分段，而非时间或字数机械切割。ASR 分片的 `\n\n` 拼接只是中间产物，写入前必须通读全文在话题转换处断段。一般 20-30 分钟视频分成 15-25 段。
+
+### 3C. Article 笔记（简洁格式）
+
+**Frontmatter：**
+
+```yaml
+---
+title: <title>
+tags: [<inferred topic tags>]
+source: <url>
+author: <author>
+date: <YYYY-MM-DD>
+type: 文章笔记
+platform: <domain>
+reading_time: <N> min
+---
+```
+
+**章节骨架（简洁格式）：**
+
+```markdown
+# <title>
+
+> [!info] 文章信息
+> author / reading time / date / [link](URL)
+
+## 核心观点
+[1-3 sentence summary of the article's main argument]
+
+## [Section headers inferred from article content]
+[Structured summary with callouts, tables, lists]
+
+## 个人思考
+- [ ] Action items
+
+## 原文摘录
+
+> [!note]-
+> 摘录内容段落一……
+>
+> 摘录内容段落二……
+```
+
+**Content storage rule:** If original content exceeds **20000 characters**, write `> 原文内容过长（N 字符），未保存。可从 [原文链接](URL) 获取。`. Under 20000 chars, embed in collapsible callout with logical paragraph breaks.
+
+**Content segmentation:** 原文摘录按**内容逻辑**分段，每 1000–2000 字一段，每段应是一个完整的论点或话题。过长且价值较低的部分可省略用 `[...省略...]` 标注。
 
 **Write 文件：**
 
@@ -494,7 +572,10 @@ URL → detect kind (podcast / video / article)
     → podcast : yt-dlp audio → paraformer-v2 ASR (sentence_timestamps)
     → video   : yt-dlp → subtitle preferred → ASR fallback
     → article : defuddle → web_reader fallback
-    → compose rich note (unified schema)
+    → compose note per-type format:
+        • podcast → rich (摘要 + Takeaways + 思维导图 + 章节导读 + 金句 + 详细论点 + 转录)
+        • video   → concise (核心观点 + sections + 转录)
+        • article → concise (核心观点 + sections + 原文摘录)
     → write AI/<type-dir>/<title>.md
     → cleanup temp files
 ```
