@@ -8,10 +8,9 @@ A curated collection of skills for AI coding assistants, compatible with Claude 
 
 | Skill | Description |
 |-------|-------------|
-| [article-to-note](skills/article-to-note/SKILL.md) | Convert web articles to Obsidian notes via Defuddle or web_reader |
+| [link-to-note](skills/link-to-note/SKILL.md) | Convert any URL (podcast / video / article) to a structured Obsidian note |
+| [link-to-html](skills/link-to-html/SKILL.md) | Convert any URL or Obsidian note to a Podwise-inspired standalone HTML viewer |
 | [article-to-anki](skills/article-to-anki/SKILL.md) | Convert web articles to Anki cards (Markdown format, import-ready) |
-| [video-to-note](skills/video-to-note/SKILL.md) | Convert YouTube / Bilibili videos to Obsidian notes via subtitles or ASR |
-| [podcast-to-html](skills/podcast-to-html/SKILL.md) | Convert podcast notes to Podwise-inspired standalone HTML viewers |
 
 ## Installation
 
@@ -43,21 +42,22 @@ curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh 
 ### Manual install
 
 ```bash
-cp -r skills/video-to-note  ~/.claude/skills/
-cp -r skills/article-to-note ~/.claude/skills/
+cp -r skills/link-to-note   ~/.claude/skills/
+cp -r skills/link-to-html    ~/.claude/skills/
 cp -r skills/article-to-anki ~/.claude/skills/
-cp -r skills/podcast-to-html ~/.claude/skills/
 ```
 
 ## Examples
 
-### article-to-note
+### link-to-note
 
 ```sh
-/article-to-note https://mp.weixin.qq.com/s/Ld_NbZZaYd2z9qpfMxP_aQ
+/link-to-note https://mp.weixin.qq.com/s/Ld_NbZZaYd2z9qpfMxP_aQ
+/link-to-note https://podcasts.apple.com/cn/podcast/.../id1552904790?i=1000755467027
+/link-to-note https://www.bilibili.com/video/BV1rxqmBhE91/
 ```
 
-> Paste an article URL → the skill extracts the content automatically → outputs a structured Obsidian note.
+> Paste any URL (article / podcast / video) → the skill auto-detects content type → fetches content → outputs a structured Obsidian note with summary, takeaways, mindmap, highlights, and transcript/full-text.
 
 <details>
 <summary>Screenshot</summary>
@@ -66,40 +66,7 @@ cp -r skills/podcast-to-html ~/.claude/skills/
 
 </details>
 
-### article-to-anki
-
-```sh
-/article-to-anki https://mp.weixin.qq.com/s/Ld_NbZZaYd2z9qpfMxP_aQ
-```
-
-> Paste an article URL → the skill extracts the content → splits into independent knowledge cards → outputs Markdown Anki card files.
-
-### podcast-to-html
-
-```sh
-/podcast-to-html https://podcasts.apple.com/cn/podcast/%E5%95%86%E4%B8%9A%E5%B0%8F%E6%A0%B735-%E9%9C%8D%E5%B0%94%E6%9C%A8%E5%85%B9%E6%B5%B7%E5%B3%A1%E4%B8%8A%E7%9A%84%E7%89%B9%E6%AE%8A%E4%BF%9D%E9%99%A9/id1552904790?i=1000755467027
-```
-
-> Paste a podcast URL → the skill generates the note first → then produces a Podwise-inspired standalone HTML with sidebar, 6 tabs (Summary, Mindmap, Transcript, Keywords, Highlights, Shownotes), dark/light theme, and interactive markmap.
-
-<video src="https://github.com/LjyYano/skill-pack/raw/main/assets/examples/podcast-to-html.mp4" controls width="100%"></video>
-
-### video-to-note
-
-```sh
-/video-to-note https://www.bilibili.com/video/BV1rxqmBhE91/
-```
-
-> Paste a Bilibili video URL → the skill uses built-in subtitles if available; otherwise, downloads audio and uses Alibaba Cloud ASR → outputs a structured Obsidian note.
-
-<details>
-<summary>Screenshot</summary>
-
-![video-to-note example](assets/examples/video-to-note.png)
-
-</details>
-
-#### ASR Configuration (required when subtitles are unavailable)
+#### ASR Configuration (required when video has no subtitles)
 
 When a video has no subtitles, the skill uses Alibaba Cloud DashScope's `qwen3-asr-flash` model for speech recognition. An API Key is required.
 
@@ -138,6 +105,24 @@ brew install yt-dlp ffmpeg
 yt-dlp --version
 ffmpeg -version
 ```
+
+### link-to-html
+
+```sh
+/link-to-html https://podcasts.apple.com/cn/podcast/%E5%95%86%E4%B8%9A%E5%B0%8F%E6%A0%B735-%E9%9C%8D%E5%B0%94%E6%9C%A8%E5%85%B9%E6%B5%B7%E5%B3%A1%E4%B8%8A%E7%9A%84%E7%89%B9%E6%AE%8A%E4%BF%9D%E9%99%A9/id1552904790?i=1000755467027
+```
+
+> Paste any URL or path to an existing Obsidian note → the skill generates a Podwise-inspired standalone HTML with sidebar, 6 tabs (Summary, Mindmap, Transcript/Full-text, Keywords, Highlights, Info), dark/light theme, and interactive markmap.
+
+<video src="https://github.com/LjyYano/skill-pack/raw/main/assets/examples/podcast-to-html.mp4" controls width="100%"></video>
+
+### article-to-anki
+
+```sh
+/article-to-anki https://mp.weixin.qq.com/s/Ld_NbZZaYd2z9qpfMxP_aQ
+```
+
+> Paste an article URL → the skill extracts the content → splits into independent knowledge cards → outputs Markdown Anki card files.
 
 ## Skill Directories
 

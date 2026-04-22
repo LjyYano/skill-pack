@@ -1,25 +1,23 @@
 ---
-name: podcast-to-html
-description: Use when the user provides a podcast URL or an existing Obsidian podcast note (.md) and wants a self-contained HTML viewer page generated. Produces a Podwise-inspired single-file HTML with sidebar, episode header, 6 tabs (Summary, Mindmap, Transcript, Keywords, Highlights, Shownotes), dark/light theme, and markmap mindmap rendering.
+name: link-to-html
+description: Use when the user provides a URL (podcast / video / article) or a path to an existing Obsidian `.md` note file and wants a self-contained HTML viewer generated. Produces a Podwise-inspired single-file HTML with sidebar, episode header, 6 type-adaptive tabs (Summary, Mindmap, Transcript/Full-text, Keywords, Highlights, Info), dark/light theme, and markmap mindmap rendering.
 ---
 
-# Podcast Note → HTML Viewer
+# Link → HTML Viewer
 
 ## Overview
 
-Read an Obsidian podcast note (`.md`) and produce a single self-contained HTML file with a Podwise-inspired UI: sidebar navigation, episode header, 6 tabbed panels, dark/light theme toggle, and interactive markmap mindmap.
+Read a URL or `.md` 文件（播客 / 视频 / 文章任意类型），产出单文件自包含 HTML：侧栏导航 + 顶部头部 + 6 个 tab 面板（按 `frontmatter.type` 自适应 labels 与内容）+ 深浅主题切换 + 交互式 markmap。
 
-**Input:** Podcast URL (will invoke `podcast-to-note` skill first) **OR** path to an existing `.md` podcast note.
+**Input:** URL **或**已有 `.md` 路径。
 
-**Output:** Same directory as the `.md`, same filename but `.html` extension.
-
-**Example:** `AI/Podcasts/商业小样37 意想不到的 AI 股 康宁.md` → `AI/Podcasts/商业小样37 意想不到的 AI 股 康宁.html`
+**Output:** 同目录同名 `.html`。
 
 ---
 
 ## Prerequisites
 
-- The `.md` note must follow the `podcast-to-note` skill's template (frontmatter + 摘要 + Takeaways + 思维导图 + 章节导读 + 金句 + 详细论点 + 完整转录)
+- No prerequisites when input is a URL (the skill fetches content independently). When input is a `.md` file, it should be an Obsidian note with standard frontmatter.
 - Internet access for CDN scripts (d3, markmap-lib, markmap-view)
 
 ---
@@ -28,15 +26,91 @@ Read an Obsidian podcast note (`.md`) and produce a single self-contained HTML f
 
 ```
 User input
-  ├─ Podcast URL → invoke podcast-to-note skill → get .md path → continue ↓
+  ├─ URL → detect type → fetch content independently → compose rich data → fill template → write .html
   └─ .md file path → read .md → extract data → fill HTML template → write .html
 ```
 
-### Step 1: If input is a URL, generate the note first
+### Step 1: If input is a URL, fetch content + compose rich data
 
-Invoke the `podcast-to-note` skill with the URL. Wait for it to finish and produce the `.md` file. Then continue to Step 2.
+**1a. Detect content type**
 
-### Step 2: Read and parse the `.md` note
+```python
+import re
+url = "URL"
+if re.search(r'podcasts\.apple\.com', url) or re.search(r'xiaoyuzhoufm\.com', url):
+    kind = "podcast"
+elif re.search(r'(youtube\.com|youtu\.be)', url):
+    kind = "video"
+elif re.search(r'(bilibili\.com|b23\.tv)', url):
+    kind = "video"
+else:
+    kind = "article"
+```
+
+**1b. Fetch metadata** (all types)
+
+```bash
+yt-dlp --dump-json --skip-download "URL" 2>&1 | python3 -c "
+import json, sys
+for line in sys.stdin.read().strip().split('\n'):
+    try:
+        d = json.loads(line)
+        print('TITLE:', d.get('title',''))
+        print('SERIES:', d.get('series',''))
+        print('UPLOADER:', d.get('channel','') or d.get('uploader',''))
+        print('UPLOAD_DATE:', d.get('upload_date',''))
+        print('DURATION:', d.get('duration_string',''))
+        print('DESCRIPTION:', (d.get('description','') or '')[:500])
+        auto_subs = d.get('automatic_captions', {})
+        manual_subs = d.get('subtitles', {})
+        if auto_subs: print('AUTO_SUBS:', ','.join(auto_subs.keys()))
+        if manual_subs: print('MANUAL_SUBS:', ','.join(manual_subs.keys()))
+        break
+    except: continue
+"
+```
+
+> For article URLs where yt-dlp fails, use defuddle CLI (`defuddle parse URL --md`) or `web_reader` MCP tool as fallback.
+
+**1c. Fetch transcript/content**
+
+| Type | Method |
+|------|--------|
+| Podcast | `yt-dlp` download audio → DashScope paraformer-v2 async ASR with `sentence_timestamps: true` → get sentences with `begin_time` |
+| Video (has subs) | `yt-dlp --write-auto-sub --sub-lang LANG` → parse VTT/SRT, extract cues with timestamps |
+| Video (no subs) | Same ASR path as podcast |
+| Article | `defuddle parse URL --md` → `web_reader` MCP fallback → extract full text |
+
+> The ASR upload flow uses DashScope's three-step process: `GET /api/v1/uploads?action=getPolicy` → multipart `POST` to OSS → `POST /api/v1/services/audio/asr/transcription` with headers `X-DashScope-Async: enable` and `X-DashScope-OssResourceResolve: enable`, then poll `/api/v1/tasks/<id>` to SUCCEEDED. See `link-to-note` skill for full code.
+
+**1d. Compose rich data for HTML template**
+
+From the transcript/content, compose ALL of the following (this is the "rich" format — the HTML viewer needs all tabs populated):
+
+- **SUMMARY_BODY**: 3–5 sentence summary
+- **TAKEAWAYS**: 5–8 key points
+- **MINDMAP_MD**: markmap markdown (root + 3–8 level-1 nodes + level-2/3 details covering all key points)
+- **OUTLINES**: 3–8 chapters with `MM:SS` timestamps (only for podcast/video; empty array for article)
+- **HIGHLIGHTS**: 3–8 best quotes with `MM:SS` timestamps (podcast/video) or without (article)
+- **KEYWORDS**: ~25 keywords from tags + high-frequency terms
+- **TURNS**: transcript segments with `{ts, sp, text}` for podcast (with speakers), `{ts, text}` for video (no speakers), or `{text}` for article (no timestamps)
+- **SHOWNOTES_CONTENT**: podcast shownotes / video info meta card / article info meta card
+
+> **Timestamps:** Use ASR `begin_time` (ms) or subtitle cue start (s), convert to `MM:SS`. Never estimate.
+
+**1e. Set type-adaptive flags**
+
+```python
+type_map = {"podcast": "podcast", "video": "video", "article": "article"}
+TYPE = type_map.get(kind, "article")
+HAS_TIMESTAMPS = kind in ("podcast", "video")
+HAS_OUTLINES = kind in ("podcast", "video")
+HAS_SPEAKERS = kind == "podcast"  # or check dialogue flag
+TAB_3_LABEL = "Transcript" if HAS_TIMESTAMPS else "Full Text"
+TAB_6_LABEL = {"podcast": "Shownotes", "video": "Video Info", "article": "Article Info"}[TYPE]
+```
+
+### Step 2: If input is a .md file, parse it
 
 Extract the following data from the note:
 
@@ -61,6 +135,23 @@ Extract the following data from the note:
 | `SHOWNOTES_HTML` | `> [!info]- 节目 Shownotes` content | Convert key-value pairs to `<dl class="shownotes-grid">` |
 | `COVER_ZH` | First 2 chars of `PODCAST_NAME` | For cover placeholder |
 | `COVER_EN` | English equivalent if available, else omit | For cover placeholder |
+
+### Step 2b: Type-specific extraction differences
+
+According to `frontmatter.type`:
+
+| Field | 播客笔记 | 视频笔记 | 文章笔记 |
+|-------|---------|---------|---------|
+| `TAB_3_LABEL`  | `Transcript` | `Transcript` | `Full Text` |
+| `TAB_6_LABEL`  | `Shownotes`  | `Video Info` | `Article Info` |
+| `HAS_TIMESTAMPS` | `true`      | `true`       | `false` |
+| `HAS_OUTLINES`   | `true`      | `true`       | `false` |
+| `HAS_SPEAKERS`   | = `dialogue` | `false`     | `false` |
+| `TYPE`           | `podcast`   | `video`      | `article` |
+| `TURNS[]` parse | `**[MM:SS]** **Speaker：** Text` | `**[MM:SS]** Text` (no speaker) | paragraphs by `\n\n`, each `{text}` no ts |
+| `OUTLINES[]`   | from `## 章节导读` | from `## 章节导读` | empty array |
+| `SHOWNOTES_CONTENT` | shownotes callout grid | `{channel, duration, upload_date, view_count, url}` | `{author, reading_time, platform, url}` |
+| `COVER_ZH`     | `PODCAST_NAME` first 2 chars | channel name first 2 chars | `platform` first 2 chars |
 
 ### Step 3: Build SPEAKER_CLASS map
 
@@ -125,6 +216,17 @@ The template file is `template.html` (same directory as this SKILL.md). All `{{T
 | `{{HIGHLIGHTS_COUNT}}` | Number of highlights | `7` |
 | `{{SHOWNOTES_CONTENT}}` | Full shownotes HTML block | (meta info + details + thoughts) |
 
+### New type-adaptive placeholders
+
+| Placeholder | Description | Example |
+|-------------|-------------|---------|
+| `{{TAB_3_LABEL}}` | Tab 3 display text | `Transcript` / `Full Text` |
+| `{{TAB_6_LABEL}}` | Tab 6 display text | `Shownotes` / `Video Info` / `Article Info` |
+| `{{HAS_TIMESTAMPS}}` | JS flag for timestamp controls | `true` / `false` |
+| `{{HAS_OUTLINES}}`   | Whether to show outlines block | `true` / `false` |
+| `{{HAS_SPEAKERS}}`   | Whether to show speaker chips | `true` / `false` |
+| `{{TYPE}}`           | `podcast` / `video` / `article` | `video` |
+
 ### Generating SPEAKER_CSS
 
 For each unique speaker in TURNS, assign a class name (`sp1`, `sp2`, `sp3`...) and color from the palette `['#7c5cfc','#0ea5e9','#f59e0b','#22c55e','#ef4444','#8b5cf6']`. Generate:
@@ -181,17 +283,25 @@ Build the HTML from three parts:
 
 5. **The template file** (`template.html`) contains all static CSS, HTML structure, and JS logic — only the `{{PLACEHOLDER}}` tokens change between episodes.
 
+6. **Type-adaptive labels**: Replace tab 3 and tab 6 hard-coded text with `{{TAB_3_LABEL}}` and `{{TAB_6_LABEL}}` placeholders.
+
+7. **Article hides timestamp controls**: When `HAS_TIMESTAMPS === false`, hide highlight `~MM:SS` buttons, hide Outlines panel, render transcript as plain paragraphs.
+
+8. **Article Shownotes tab**: Render simplified meta card with `{ author, reading_time, platform, url }`, tab label is `Article Info`.
+
 ---
 
 ## Quick Reference
 
 ```
 Input: URL or .md path
-  → (if URL) invoke podcast-to-note → get .md
-  → Parse .md → extract TITLE, PODCAST_NAME, DATE, DURATION, PLATFORM,
-                 SUMMARY, TAKEAWAYS, MINDMAP_MD, OUTLINES, HIGHLIGHTS,
-                 TURNS, KEYWORDS, DETAILS, THOUGHTS, SHOWNOTES
-  → Build SPEAKER_CLASS map
-  → Fill HTML template (copy static parts from reference)
-  → Write to same-dir .html
+  → URL path:
+      detect type → fetch metadata + content (yt-dlp / ASR / subtitles / defuddle)
+      → compose rich data (Summary + Takeaways + Mindmap + Outlines + Highlights + Keywords + Turns + Shownotes)
+      → set type flags (TYPE, HAS_TIMESTAMPS, HAS_OUTLINES, HAS_SPEAKERS, TAB_*_LABEL)
+      → fill template.html → write .html
+  → .md path:
+      read .md → extract data from frontmatter + sections
+      → set type flags from frontmatter.type
+      → fill template.html → write .html
 ```
