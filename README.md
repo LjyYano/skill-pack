@@ -24,21 +24,16 @@ curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh 
 ### Install for a specific tool
 
 ```bash
-# Claude Code
-curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --claude
-
-# Codex CLI
-curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --codex
-
-# OpenCode
-curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --opencode
-
-# OpenClaw
-curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --openclaw
-
-# Install all
-curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --all
+curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- <flag>
 ```
+
+| Flag | Target |
+|------|--------|
+| `--claude` | Claude Code (`~/.claude/skills/`) |
+| `--codex` | Codex CLI (`~/.codex/skills/`) |
+| `--opencode` | OpenCode (`~/.opencode/skills/`) |
+| `--openclaw` | OpenClaw (`~/.openclaw/skills/`) |
+| `--all` | All of the above |
 
 ### Manual install
 

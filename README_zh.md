@@ -24,21 +24,16 @@ curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh 
 ### 指定工具安装
 
 ```bash
-# Claude Code
-curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --claude
-
-# Codex CLI
-curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --codex
-
-# OpenCode
-curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --opencode
-
-# OpenClaw
-curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --openclaw
-
-# 全部安装
-curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- --all
+curl -fsSL https://raw.githubusercontent.com/LjyYano/skill-pack/main/install.sh | bash -s -- <flag>
 ```
+
+| Flag | 目标 |
+|------|------|
+| `--claude` | Claude Code（`~/.claude/skills/`） |
+| `--codex` | Codex CLI（`~/.codex/skills/`） |
+| `--opencode` | OpenCode（`~/.opencode/skills/`） |
+| `--openclaw` | OpenClaw（`~/.openclaw/skills/`） |
+| `--all` | 以上全部 |
 
 ### 手动安装
 
