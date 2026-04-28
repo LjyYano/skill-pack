@@ -97,30 +97,61 @@ Copy `skills/video-to-note` too only if you need the legacy workflow.
 
 `link-to-note` uses video subtitles whenever they are available. When a video has no subtitles, or when the input is a podcast / audio URL, it uses Alibaba Cloud DashScope `paraformer-v2` for async speech recognition.
 
-Get an API key from the [Alibaba Cloud DashScope Console](https://bailian.console.aliyun.com/), then set:
+Get an API key from the [Alibaba Cloud DashScope Console](https://bailian.console.aliyun.com/), then configure it for your OS and shell.
+
+macOS / Linux:
 
 ```bash
-# Current session only
+# Current terminal only
 export ALIYUN_API_KEY="sk-xxxxxxxxxxxxxxxxxxxx"
 
-# Persistent, for zsh
+# Persistent for zsh, the default shell on recent macOS versions
 echo 'export ALIYUN_API_KEY="sk-xxxxxxxxxxxxxxxxxxxx"' >> ~/.zshrc
 source ~/.zshrc
+
+# Persistent for bash
+echo 'export ALIYUN_API_KEY="sk-xxxxxxxxxxxxxxxxxxxx"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-Restart your AI coding assistant after setting the environment variable.
+If your shell reads another startup file, such as `~/.bash_profile`, add the same `export ALIYUN_API_KEY=...` line there instead.
 
-Install `yt-dlp` on macOS for YouTube, podcasts, and generic audio URLs:
+Windows PowerShell:
+
+```powershell
+# Current PowerShell session only
+$env:ALIYUN_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxx"
+
+# Persistent for the current Windows user
+[Environment]::SetEnvironmentVariable("ALIYUN_API_KEY", "sk-xxxxxxxxxxxxxxxxxxxx", "User")
+```
+
+Open a new terminal and restart your AI coding assistant after setting the environment variable.
+
+Install `yt-dlp` if you use YouTube, podcasts, or generic audio URLs:
 
 ```bash
+# macOS
 brew install yt-dlp
+yt-dlp --version
+```
+
+```powershell
+# Windows PowerShell
+py -m pip install -U yt-dlp
 yt-dlp --version
 ```
 
 Install the Python dependency if it is missing:
 
 ```bash
+# macOS / Linux
 python3 -m pip install requests
+```
+
+```powershell
+# Windows PowerShell
+py -m pip install requests
 ```
 
 `link-to-note` does not require `ffmpeg`; `paraformer-v2` processes the full audio file directly.

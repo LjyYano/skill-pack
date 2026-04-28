@@ -97,30 +97,61 @@ cp -r skills/article-to-anki "$SKILLS_DIR"/
 
 `link-to-note` 会优先使用视频字幕。视频没有字幕，或输入为播客 / 音频 URL 时，会使用阿里云 DashScope 的 `paraformer-v2` 模型进行异步语音识别。
 
-前往 [阿里云百炼控制台](https://bailian.console.aliyun.com/) 创建 API Key，然后配置环境变量：
+前往 [阿里云百炼控制台](https://bailian.console.aliyun.com/) 创建 API Key，然后按你的系统和终端配置环境变量。
+
+macOS / Linux：
 
 ```bash
-# 临时生效，仅当前终端
+# 临时生效，仅当前终端窗口
 export ALIYUN_API_KEY="sk-xxxxxxxxxxxxxxxxxxxx"
 
-# 持久生效，以 zsh 为例
+# zsh 持久生效，新版 macOS 默认是 zsh
 echo 'export ALIYUN_API_KEY="sk-xxxxxxxxxxxxxxxxxxxx"' >> ~/.zshrc
 source ~/.zshrc
+
+# bash 持久生效
+echo 'export ALIYUN_API_KEY="sk-xxxxxxxxxxxxxxxxxxxx"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-设置环境变量后，需要重启你的 AI 编程助手。
+如果你的终端读取其他启动文件，例如 `~/.bash_profile`，把同一行 `export ALIYUN_API_KEY=...` 加到那个文件里即可。
 
-macOS 安装 `yt-dlp`，用于 YouTube、播客和通用音频 URL：
+Windows PowerShell：
+
+```powershell
+# 临时生效，仅当前 PowerShell 窗口
+$env:ALIYUN_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxx"
+
+# 对当前 Windows 用户持久生效
+[Environment]::SetEnvironmentVariable("ALIYUN_API_KEY", "sk-xxxxxxxxxxxxxxxxxxxx", "User")
+```
+
+设置环境变量后，打开新的终端窗口，并重启你的 AI 编程助手。
+
+如果使用 YouTube、播客和通用音频 URL，需要安装 `yt-dlp`：
 
 ```bash
+# macOS
 brew install yt-dlp
+yt-dlp --version
+```
+
+```powershell
+# Windows PowerShell
+py -m pip install -U yt-dlp
 yt-dlp --version
 ```
 
 如果缺少 Python 依赖，可以安装 `requests`：
 
 ```bash
+# macOS / Linux
 python3 -m pip install requests
+```
+
+```powershell
+# Windows PowerShell
+py -m pip install requests
 ```
 
 `link-to-note` 不需要 `ffmpeg`；`paraformer-v2` 会直接处理整段音频。
