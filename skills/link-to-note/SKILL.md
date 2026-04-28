@@ -31,11 +31,10 @@ description: Use when the user provides a YouTube, Bilibili, Apple Podcasts, Xia
 
 ## Prerequisites
 
-- `yt-dlp` — 元数据 + 字幕 / 音频下载（Apple Podcasts URL 通常会被解析到 xiaoyuzhoufm CDN m4a）
-- `python3` + `requests` — API 调用
+- `yt-dlp` — YouTube 元数据 + 字幕 / 音频下载；Apple Podcasts URL 通常会被解析到 xiaoyuzhoufm CDN m4a
+- `python3` + `requests` — Bilibili REST API（yt-dlp 对 Bilibili 返回 412，不可用）+ DashScope API 调用
 - `ALIYUN_API_KEY` — DashScope API key（paraformer-v2 异步转写）
 - 不依赖 Obsidian CLI，直接 Write 文件即可（Obsidian 会自动索引）
-- Bilibili cookies（可选）— 会员 / 年龄限制视频用 `--cookies-from-browser chrome`
 
 > **ffmpeg 不再需要。** paraformer-v2 处理整段音频，不需要本地分片。旧版 `qwen3-asr-flash` + chunking 的路径已淘汰。
 
@@ -65,6 +64,63 @@ slug = hashlib.md5(url.encode()).hexdigest()[:10]  # short slug for temp files
 
 ### 1. 元数据 + 字幕可用性
 
+> **⚠️ Bilibili 不走 yt-dlp。** yt-dlp 对 Bilibili 返回 `HTTP Error 412: Precondition Failed`（截至 2026.03.17 版本，加 cookies / headers / extractor-args 均无效），必须用 Bilibili REST API。YouTube 和其他平台仍用 yt-dlp。
+
+#### 1A. Bilibili 路径（REST API 直取）
+
+```python
+import re, requests, json
+from datetime import datetime
+
+url = "URL"
+bvid_match = re.search(r'(BV[a-zA-Z0-9]+)', url)
+bvid = bvid_match.group(1)
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Referer': 'https://www.bilibili.com'
+}
+
+# 1) 元数据
+info = requests.get(f'https://api.bilibili.com/x/web-interface/view?bvid={bvid}',
+                     headers=headers, timeout=15).json()['data']
+TITLE = info['title']
+CHANNEL = info['owner']['name']
+UPLOAD_DATE = datetime.fromtimestamp(info['pubdate']).strftime('%Y%m%d')
+DURATION_SEC = info['duration']
+DURATION = f"{DURATION_SEC // 60}:{DURATION_SEC % 60:02d}"
+DESCRIPTION = info.get('desc', '')
+CID = info['cid']
+
+# 2) 字幕检测
+player = requests.get(f'https://api.bilibili.com/x/player/v2?bvid={bvid}&cid={CID}',
+                       headers=headers, timeout=15).json()
+subtitles = player.get('data', {}).get('subtitle', {}).get('subtitles', [])
+# subtitles 非空 → 有字幕（B站字幕通常只有 CC 字幕）
+# subtitles 为空 → NO_SUBS，走 ASR
+```
+
+**Bilibili 音频下载（Step 2B 需要时）：**
+
+```python
+# 获取音频流 URL
+playurl = requests.get(
+    f'https://api.bilibili.com/x/player/playurl?bvid={bvid}&cid={CID}&qn=64&fnval=16',
+    headers=headers, timeout=15
+).json()['data']['dash']['audio']
+best_audio = max(playurl, key=lambda x: x.get('bandwidth', 0))
+audio_url = best_audio['baseUrl']
+
+# 下载 m4s（实际 m4a 兼容，可直接送 paraformer-v2）
+audio_resp = requests.get(audio_url, headers=headers, timeout=120, stream=True)
+with open(f'./.ltn_audio_{slug}.m4a', 'wb') as f:
+    for chunk in audio_resp.iter_content(chunk_size=8192):
+        f.write(chunk)
+```
+
+**Bilibili 字幕下载（有字幕时）：** 字幕 URL 在 `subtitles[].subtitle_url` 中，需要补 `https:` 前缀，下载后为 JSON 格式（`body` 数组，每项含 `from`, `to`, `content`），直接解析即可，无需 SRT/VTT 解析器。
+
+#### 1B. YouTube / 其他平台路径（yt-dlp）
+
 ```bash
 yt-dlp --dump-json --skip-download "URL" 2>&1 | python3 -c "
 import json, sys
@@ -88,8 +144,6 @@ for line in sys.stdin.read().strip().split('\n'):
     except: continue
 "
 ```
-
-> **Bilibili 下载失败：** 会员 / 年龄限制时加 `--cookies-from-browser chrome` 重试。
 
 **路径选择：**
 
@@ -175,6 +229,8 @@ paragraphs = parse_sub(sub_files[0]) if sub_files else []
 ### 2B. ASR 路径（paraformer-v2 异步转写）
 
 **下载音频：**
+
+> **Bilibili 不走 yt-dlp。** Bilibili 音频已在 Step 1A 中通过 REST API 下载到 `./.ltn_audio_SLUG.m4a`，跳过此步。以下 yt-dlp 命令仅用于 YouTube / 其他平台。
 
 ```bash
 yt-dlp -f "bestaudio[ext=m4a]/bestaudio" \
@@ -438,7 +494,7 @@ for pat in [f'.ltn_sub_{slug}*', f'.ltn_audio_{slug}*', f'.ltn_asr_{slug}*']:
 | Task FAILED | 音频质量差或语言不支持 | 加 `language_hints`；或本地预处理 |
 | Task 轮询超时 | 长音频处理慢 | 增大 poll 次数（200 次 ~ 10 分钟） |
 | Subtitle parse 空 | 字幕格式异常 | 换 `--sub-format`（srv3 > vtt > srt） |
-| Bilibili 下载失败 | 会员 / 年龄限制 | 加 `--cookies-from-browser chrome` |
+| Bilibili yt-dlp 返回 `HTTP Error 412` | Bilibili 反爬策略，yt-dlp extractor 失效 | **不用 yt-dlp**，改用 Bilibili REST API（见 Step 1A）：`/x/web-interface/view` 取元数据，`/x/player/playurl` 取音频流 |
 | 长中文文件名在 shell 中报错 | 临时文件命名 | 所有临时文件用 `slug`（MD5 前 10 位），只有最终 `.md` 用真实标题 |
 | `rm -rf` 被 hook 拦截 | 安全 | 用 Python `os.remove` |
 
@@ -448,10 +504,12 @@ for pat in [f'.ltn_sub_{slug}*', f'.ltn_audio_{slug}*', f'.ltn_asr_{slug}*']:
 
 ```
 URL → platform detect (YouTube / Bilibili / Apple Podcasts / 小宇宙 / generic)
-    → yt-dlp metadata (+ subtitle availability for videos)
+    → metadata + subtitle check:
+        ├─ Bilibili  → REST API（/x/web-interface/view + /x/player/v2）❌ 不用 yt-dlp（412）
+        └─ YouTube等 → yt-dlp --dump-json
     → transcript pipeline:
-        ├─ 视频 + 有字幕  → yt-dlp --write-auto-sub → parse → [{begin_time_ms, text}]
-        └─ 视频无字幕 或 音频 → yt-dlp audio → paraformer-v2 async → merge_sentences → [{begin_time_ms, text}]
+        ├─ 视频 + 有字幕  → yt-dlp --write-auto-sub（YouTube）/ REST API subtitle（Bilibili）→ parse → [{begin_time_ms, text}]
+        └─ 视频无字幕 或 音频 → yt-dlp audio（YouTube）/ REST API audio（Bilibili）→ paraformer-v2 async → merge_sentences → [{begin_time_ms, text}]
     → compose note (shownotes[optional] + summary + takeaways + mindmap
                     + chapters + highlights + details + thoughts + transcript)
     → Write AI/{YouTube|Bilibili|Podcasts|Audio}/<title>.md
