@@ -6,7 +6,7 @@
 
 ## 优先用哪个
 
-新用户建议从 [`link-to-note`](skills/link-to-note/SKILL.md) 开始。它是推荐的「URL 转 Obsidian 笔记」工作流，覆盖 YouTube、Bilibili、Apple Podcasts、小宇宙，以及其他 `yt-dlp` 可处理的音频链接。
+新用户建议从 [`link-to-note`](skills/link-to-note/SKILL.md) 开始。它是推荐的「URL 转 Obsidian 笔记」工作流，覆盖 YouTube、Bilibili、Apple Podcasts、小宇宙，以及其他兼容的音频链接。
 
 [`video-to-note`](skills/video-to-note/SKILL.md) 主要用于兼容旧的视频专用流程。新使用场景优先选择 `link-to-note`。
 
@@ -88,7 +88,7 @@ cp -r skills/article-to-anki "$SKILLS_DIR"/
 
 | Skill | 必需 | 可选 / 条件触发 |
 |-------|------|-----------------|
-| `link-to-note` | `yt-dlp`、`python3`、`requests` | 播客、音频链接、无字幕视频需要 `ALIYUN_API_KEY`；受限 Bilibili 视频可能需要浏览器 cookies |
+| `link-to-note` | `python3`、`requests`；YouTube、播客和通用音频 URL 需要 `yt-dlp` | 播客、音频链接、无字幕视频需要 `ALIYUN_API_KEY` |
 | `link-to-html` | `link-to-note` 格式的 `.md` 笔记，或可先由 `link-to-note` 处理的 URL | markmap 渲染需要访问 CDN 脚本 |
 | `article-to-anki` | 文章 URL 或本地文章文件 | 助手侧可用的网页正文提取能力 |
 | `video-to-note` | `yt-dlp`、`ffmpeg`、`python3`、`requests`、Obsidian CLI | ASR 兜底需要 `ALIYUN_API_KEY` |
@@ -110,7 +110,7 @@ source ~/.zshrc
 
 设置环境变量后，需要重启你的 AI 编程助手。
 
-macOS 安装 `yt-dlp`：
+macOS 安装 `yt-dlp`，用于 YouTube、播客和通用音频 URL：
 
 ```bash
 brew install yt-dlp
@@ -175,5 +175,5 @@ python3 -m pip install requests
 
 - 生成文件会写入当前工作目录下。
 - `link-to-note` 不标注说话人；转录行只保留时间戳和正文。
+- `link-to-note` 处理 Bilibili 时走 REST API，不走 `yt-dlp`，因为当前 `yt-dlp` 提取 Bilibili 可能返回 HTTP 412。
 - `link-to-html` 会在源 `.md` 同目录输出 `.html` 文件。
-- 受限 Bilibili 视频可能需要通过 `yt-dlp` 使用浏览器 cookies。

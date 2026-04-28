@@ -6,7 +6,7 @@ A curated collection of skills for AI coding assistants, compatible with Claude 
 
 ## What to Use First
 
-Start with [`link-to-note`](skills/link-to-note/SKILL.md). It is the recommended URL-to-note workflow for YouTube, Bilibili, Apple Podcasts, Xiaoyuzhou, and other `yt-dlp` compatible audio links.
+Start with [`link-to-note`](skills/link-to-note/SKILL.md). It is the recommended URL-to-note workflow for YouTube, Bilibili, Apple Podcasts, Xiaoyuzhou, and other compatible audio links.
 
 [`video-to-note`](skills/video-to-note/SKILL.md) is kept for backward compatibility with the old video-only workflow. Prefer `link-to-note` for new usage.
 
@@ -88,7 +88,7 @@ Copy `skills/video-to-note` too only if you need the legacy workflow.
 
 | Skill | Required | Optional / conditional |
 |-------|----------|------------------------|
-| `link-to-note` | `yt-dlp`, `python3`, `requests` | `ALIYUN_API_KEY` for podcasts, audio links, and videos without subtitles; browser cookies for restricted Bilibili videos |
+| `link-to-note` | `python3`, `requests`; `yt-dlp` for YouTube, podcasts, and generic audio URLs | `ALIYUN_API_KEY` for podcasts, audio links, and videos without subtitles |
 | `link-to-html` | A `link-to-note` style `.md` note, or a URL that can first be processed by `link-to-note` | Internet access for CDN scripts used by markmap rendering |
 | `article-to-anki` | An article URL or local article file | A page extractor available to your assistant |
 | `video-to-note` | `yt-dlp`, `ffmpeg`, `python3`, `requests`, Obsidian CLI | `ALIYUN_API_KEY` for ASR fallback |
@@ -110,7 +110,7 @@ source ~/.zshrc
 
 Restart your AI coding assistant after setting the environment variable.
 
-Install `yt-dlp` on macOS:
+Install `yt-dlp` on macOS for YouTube, podcasts, and generic audio URLs:
 
 ```bash
 brew install yt-dlp
@@ -175,5 +175,5 @@ Paste an article URL or local article path. The skill extracts the content, spli
 
 - Generated files are written under the current working directory.
 - `link-to-note` does not add speaker labels; transcript lines use timestamp plus text only.
+- `link-to-note` uses Bilibili REST APIs instead of `yt-dlp`, because current `yt-dlp` Bilibili extraction may return HTTP 412.
 - `link-to-html` outputs an `.html` file next to the source `.md` file.
-- Restricted Bilibili videos may need browser cookies through `yt-dlp`.
